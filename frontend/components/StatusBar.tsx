@@ -1,0 +1,66 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+export default function StatusBar() {
+  const [time, setTime] = useState("");
+
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      setTime(
+        now.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).replace(/\//g, ".") +
+        " // " +
+        now.toLocaleTimeString("en-US", { hour12: false })
+      );
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <header className="relative z-10 border-b border-jarvis-border bg-jarvis-bg/80 backdrop-blur-sm">
+      <div className="flex items-center justify-between px-6 py-3 text-xs font-mono">
+        {/* Left */}
+        <div className="flex items-center gap-6">
+          <span className="glow-cyan text-base font-bold tracking-[0.3em]">
+            J.A.R.V.I.S
+          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className="w-2 h-2 rounded-full bg-cyan-jarvis pulse-dot"
+              style={{ backgroundColor: "#00D4FF" }}
+            />
+            <span className="text-cyan-jarvis opacity-80">ONLINE</span>
+          </div>
+          <span className="text-jarvis-text opacity-50">v4.2.1</span>
+        </div>
+
+        {/* Center */}
+        <div className="hidden md:flex items-center gap-8 text-jarvis-text opacity-60">
+          <span>NEURAL: <span className="text-cyan-jarvis">98.2%</span></span>
+          <span>VISION: <span className="text-cyan-jarvis">ACTIVE</span></span>
+          <span>CORES: <span className="text-cyan-jarvis">12</span></span>
+        </div>
+
+        {/* Right */}
+        <div className="text-jarvis-text opacity-50 tabular-nums">{time}</div>
+      </div>
+
+      {/* Animated bottom line */}
+      <div
+        className="absolute bottom-0 left-0 right-0 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent 0%, #00D4FF 20%, #00D4FF 80%, transparent 100%)",
+          opacity: 0.3,
+        }}
+      />
+    </header>
+  );
+}

@@ -1,0 +1,293 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --cyan: #00d4ff;
+  --orange: #ff6b35;
+  --bg: #050508;
+  --card: #0a0a14;
+  --border: rgba(0, 212, 255, 0.2);
+  --text: #b0c4de;
+  --glow: rgba(0, 212, 255, 0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Space Mono", monospace;
+  overflow-x: hidden;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+/* ── Grid background ── */
+.jarvis-grid {
+  background-image:
+    linear-gradient(rgba(0, 212, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 255, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ── Corner brackets ── */
+.hud-corners {
+  position: relative;
+}
+.hud-corners::before,
+.hud-corners::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: var(--cyan);
+  border-style: solid;
+  border-width: 0;
+}
+.hud-corners::before {
+  top: 0;
+  left: 0;
+  border-top-width: 2px;
+  border-left-width: 2px;
+}
+.hud-corners::after {
+  bottom: 0;
+  right: 0;
+  border-bottom-width: 2px;
+  border-right-width: 2px;
+}
+
+/* ── Glow text ── */
+.glow-cyan {
+  color: var(--cyan);
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.8), 0 0 30px rgba(0, 212, 255, 0.4);
+}
+.glow-orange {
+  color: var(--orange);
+  text-shadow: 0 0 10px rgba(255, 107, 53, 0.8);
+}
+
+/* ── Glow borders ── */
+.border-glow {
+  border: 1px solid var(--border);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.1), inset 0 0 12px rgba(0, 212, 255, 0.03);
+}
+.border-glow-active {
+  border: 1px solid var(--cyan);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.3), inset 0 0 20px rgba(0, 212, 255, 0.05);
+}
+
+/* ── Scan line on images ── */
+.scan-container {
+  position: relative;
+  overflow: hidden;
+}
+.scan-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--cyan),
+    rgba(0, 212, 255, 0.8),
+    var(--cyan),
+    transparent
+  );
+  box-shadow: 0 0 12px var(--cyan), 0 0 4px var(--cyan);
+  animation: scanline 1.8s linear infinite;
+  z-index: 10;
+}
+
+@keyframes scanline {
+  0% { top: -2px; }
+  100% { top: 100%; }
+}
+
+/* ── CRT scanlines overlay ── */
+.crt-overlay::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ── Typing cursor ── */
+.cursor::after {
+  content: "_";
+  animation: blink 1s step-end infinite;
+  color: var(--cyan);
+}
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+/* ── Glitch effect ── */
+@keyframes glitch1 {
+  0%, 100% { clip-path: inset(0 0 95% 0); transform: translateX(-3px); }
+  25% { clip-path: inset(30% 0 50% 0); transform: translateX(3px); }
+  75% { clip-path: inset(70% 0 10% 0); transform: translateX(-2px); }
+}
+@keyframes glitch2 {
+  0%, 100% { clip-path: inset(80% 0 5% 0); transform: translateX(3px); }
+  33% { clip-path: inset(10% 0 75% 0); transform: translateX(-3px); }
+  66% { clip-path: inset(50% 0 30% 0); transform: translateX(2px); }
+}
+
+.glitch-text {
+  position: relative;
+}
+.glitch-text::before,
+.glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  color: var(--cyan);
+}
+.glitch-text::before {
+  animation: glitch1 0.4s steps(2) infinite;
+  color: var(--orange);
+  opacity: 0.7;
+}
+.glitch-text::after {
+  animation: glitch2 0.4s steps(2) infinite;
+  opacity: 0.6;
+}
+
+/* ── HUD ring spin ── */
+@keyframes hudSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes hudSpinReverse {
+  to { transform: rotate(-360deg); }
+}
+
+/* ── Fade up card reveal ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-fade-up {
+  animation: fadeUp 0.5s ease forwards;
+}
+
+/* ── Progress bar fill ── */
+@keyframes fillBar {
+  from { width: 0%; }
+}
+.progress-bar-fill {
+  animation: fillBar 0.4s ease forwards;
+}
+
+/* ── Hex pattern background ── */
+.hex-bg {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='100'%3E%3Cpath d='M28 66L0 50V16L28 0l28 16v34z' fill='none' stroke='rgba(0,212,255,0.04)' stroke-width='1'/%3E%3Cpath d='M28 100L0 84V50l28-16 28 16v34z' fill='none' stroke='rgba(0,212,255,0.04)' stroke-width='1'/%3E%3C/svg%3E");
+}
+
+/* ── Dossier card ── */
+.dossier-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  position: relative;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.dossier-card:hover {
+  border-color: var(--cyan);
+  box-shadow: 0 0 24px rgba(0, 212, 255, 0.15);
+}
+.dossier-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.dossier-card:hover::before {
+  opacity: 1;
+}
+
+/* ── Input field ── */
+.jarvis-input {
+  background: rgba(0, 212, 255, 0.03);
+  border: 1px solid var(--border);
+  color: var(--cyan);
+  caret-color: var(--cyan);
+  outline: none;
+  font-family: "Space Mono", monospace;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.jarvis-input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+}
+.jarvis-input::placeholder {
+  color: rgba(0, 212, 255, 0.3);
+}
+
+/* ── Button ── */
+.jarvis-btn {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.1), rgba(0, 212, 255, 0.05));
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  font-family: "Space Mono", monospace;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.1s;
+}
+.jarvis-btn:hover {
+  background: rgba(0, 212, 255, 0.15);
+  box-shadow: 0 0 24px rgba(0, 212, 255, 0.4);
+}
+.jarvis-btn:active {
+  transform: scale(0.98);
+}
+.jarvis-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(45deg, transparent 30%, rgba(0, 212, 255, 0.1) 50%, transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 0.5s;
+}
+.jarvis-btn:hover::after {
+  transform: translateX(100%);
+}
+
+/* ── Pulse dot ── */
+@keyframes pulseDot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 212, 255, 0.7); }
+  50% { box-shadow: 0 0 0 6px rgba(0, 212, 255, 0); }
+}
+.pulse-dot {
+  animation: pulseDot 2s ease infinite;
+}
