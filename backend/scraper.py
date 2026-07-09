@@ -54,9 +54,17 @@ def scrape_profile(username: str, session_id: str | None = None, max_posts: int 
     if profile.is_private:
         raise ValueError(f"Profile '{username}' is private")
 
-    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=180)
-    posts = []
+    for days in (180, 548):  # 6 months → fallback 1.5 years
+        cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
+        posts = _collect_posts(profile, cutoff, max_posts)
+        if posts:
+            break
 
+    return posts
+
+
+def _collect_posts(profile, cutoff, max_posts: int) -> list[dict]:
+    posts = []
     try:
         for post in profile.get_posts():
             post_date = post.date_utc.replace(tzinfo=timezone.utc)
@@ -70,20 +78,34 @@ def scrape_profile(username: str, session_id: str | None = None, max_posts: int 
             if post.typename == "GraphSidecar":
                 try:
                     for node in post.get_sidecar_nodes():
-                        if not node.is_video:
-                            posts.append({
-                                "id": f"{post.shortcode}_{len(posts)}",
-                                "url": node.display_url,
-                                "timestamp": post_date.isoformat(),
-                                "caption": (post.caption or "")[:200],
-                                "likes": post.likes,
-                                "post_url": f"https://www.instagram.com/p/{post.shortcode}/",
-                                "is_carousel": True,
-                            })
+                        # Photos: use display_url. Video nodes: use display_url (thumbnail)
+                        posts.append({
+                            "id": f"{post.shortcode}_{len(posts)}",
+                            "url": node.display_url,
+                            "timestamp": post_date.isoformat(),
+                            "caption": (post.caption or "")[:200],
+                            "likes": post.likes,
+                            "post_url": f"https://www.instagram.com/p/{post.shortcode}/",
+                            "is_carousel": True,
+                            "is_video": node.is_video,
+                        })
                 except Exception:
                     posts.append(_post_to_dict(post))
             elif post.typename == "GraphImage":
                 posts.append(_post_to_dict(post))
+            elif post.typename == "GraphVideo":
+                # Reels / video posts — use thumbnail_url (cover JPEG)
+                thumbnail = getattr(post, "thumbnail_url", None) or post.url
+                posts.append({
+                    "id": post.shortcode,
+                    "url": thumbnail,
+                    "timestamp": post_date.isoformat(),
+                    "caption": (post.caption or "")[:200],
+                    "likes": post.likes,
+                    "post_url": f"https://www.instagram.com/p/{post.shortcode}/",
+                    "is_carousel": False,
+                    "is_video": True,
+                })
 
     except Exception as e:
         if not posts:
@@ -101,4 +123,5 @@ def _post_to_dict(post) -> dict:
         "likes": post.likes,
         "post_url": f"https://www.instagram.com/p/{post.shortcode}/",
         "is_carousel": False,
+        "is_video": False,
     }

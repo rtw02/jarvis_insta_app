@@ -5,10 +5,17 @@ const path = require("path");
 const BASE =
   "https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights";
 
-// Only need TinyFaceDetector — smallest model, fast in browser
 const FILES = [
+  // Face detection
   "tiny_face_detector_model-weights_manifest.json",
   "tiny_face_detector_model-shard1",
+  // Tiny landmark model (required for face alignment before recognition)
+  "face_landmark_68_tiny_model-weights_manifest.json",
+  "face_landmark_68_tiny_model-shard1",
+  // Face recognition (128D embeddings)
+  "face_recognition_model-weights_manifest.json",
+  "face_recognition_model-shard1",
+  "face_recognition_model-shard2",
 ];
 
 const OUT_DIR = path.join(__dirname, "..", "public", "models");

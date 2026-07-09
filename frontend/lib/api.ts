@@ -8,6 +8,7 @@ export interface RawPost {
   likes: number;
   post_url: string;
   is_carousel: boolean;
+  is_video: boolean;
 }
 
 export interface ScrapeResult {

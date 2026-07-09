@@ -43,7 +43,7 @@ export default function ScanProgress({ current, total, status, found }: Props) {
               stroke="rgba(0,212,255,0.15)"
               strokeWidth="1"
               strokeDasharray="4 6"
-              style={{ animation: "hudSpin 10s linear infinite" }}
+              style={{ animation: "hudSpin 10s linear infinite", transformOrigin: "72px 72px", transformBox: "fill-box" }}
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">

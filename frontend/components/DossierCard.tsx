@@ -71,6 +71,16 @@ export default function DossierCard({ post, rank, style }: Props) {
           </div>
         )}
 
+        {/* Reel badge */}
+        {post.is_video && !scanning && (
+          <div
+            className="absolute top-2 right-2 text-xs px-1.5 py-0.5 rounded font-bold"
+            style={{ backgroundColor: "rgba(255,107,53,0.25)", border: "1px solid rgba(255,107,53,0.5)", color: "#FF6B35" }}
+          >
+            ▶ REEL
+          </div>
+        )}
+
         {/* Corner brackets on hover */}
         <div className="absolute top-1 left-1 w-3 h-3 border-t border-l opacity-60" style={{ borderColor: color }} />
         <div className="absolute top-1 right-1 w-3 h-3 border-t border-r opacity-60" style={{ borderColor: color }} />
