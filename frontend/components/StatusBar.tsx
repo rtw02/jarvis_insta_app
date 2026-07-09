@@ -38,7 +38,7 @@ export default function StatusBar() {
             />
             <span className="text-cyan-jarvis opacity-80">ONLINE</span>
           </div>
-          <span className="text-jarvis-text opacity-50">v4.2.1</span>
+          <span className="text-jarvis-text opacity-50">v0.01</span>
         </div>
 
         {/* Center */}

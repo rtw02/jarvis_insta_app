@@ -2,38 +2,47 @@ let modelsLoaded = false;
 
 export async function loadModels(): Promise<void> {
   if (modelsLoaded) return;
-  // Dynamic import — face-api.js must be client-side only
   const faceapi = await import("face-api.js");
   const MODEL_URL = "/models";
-  await Promise.all([
-    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-  ]);
+  await Promise.all([faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL)]);
   modelsLoaded = true;
 }
 
 export interface FaceResult {
   faceCount: number;
-  maxFaceAreaPct: number; // largest face as % of total image area
+  maxFaceAreaPct: number;
 }
+
+const MIN_FACE_AREA_PCT = 1.0;
+const ASPECT_MIN = 0.5;
+const ASPECT_MAX = 2.0;
 
 export async function detectFaces(imgEl: HTMLImageElement): Promise<FaceResult> {
   const faceapi = await import("face-api.js");
 
-  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 });
+  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.6 });
   const detections = await faceapi.detectAllFaces(imgEl, options);
 
   if (detections.length === 0) return { faceCount: 0, maxFaceAreaPct: 0 };
 
   const imgArea = imgEl.naturalWidth * imgEl.naturalHeight;
   let maxPct = 0;
+  let validCount = 0;
 
   for (const d of detections) {
-    const faceArea = d.box.width * d.box.height;
+    const { width, height } = d.box;
+    const faceArea = width * height;
     const pct = (faceArea / imgArea) * 100;
+    const aspect = width / height;
+
+    if (pct < MIN_FACE_AREA_PCT) continue;
+    if (aspect < ASPECT_MIN || aspect > ASPECT_MAX) continue;
+
+    validCount++;
     if (pct > maxPct) maxPct = pct;
   }
 
-  return { faceCount: detections.length, maxFaceAreaPct: maxPct };
+  return { faceCount: validCount, maxFaceAreaPct: maxPct };
 }
 
 export function loadImageElement(src: string): Promise<HTMLImageElement> {

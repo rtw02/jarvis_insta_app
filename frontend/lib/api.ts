@@ -16,11 +16,11 @@ export interface ScrapeResult {
   posts: RawPost[];
 }
 
-export async function fetchProfile(username: string): Promise<ScrapeResult> {
+export async function fetchProfile(username: string, sessionId: string): Promise<ScrapeResult> {
   const res = await fetch(`${BACKEND}/scrape`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username }),
+    body: JSON.stringify({ username, session_id: sessionId }),
   });
 
   if (!res.ok) {
@@ -33,4 +33,14 @@ export async function fetchProfile(username: string): Promise<ScrapeResult> {
 
 export function proxyUrl(originalUrl: string): string {
   return `${BACKEND}/proxy?url=${encodeURIComponent(originalUrl)}`;
+}
+
+export async function connectInstagram(): Promise<string> {
+  const res = await fetch(`${BACKEND}/auth/instagram`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Auth failed" }));
+    throw new Error(err.detail || "Auth failed");
+  }
+  const data = await res.json();
+  return data.session_id as string;
 }

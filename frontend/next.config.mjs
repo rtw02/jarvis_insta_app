@@ -6,8 +6,12 @@ const nextConfig = {
     ],
   },
   webpack: (config) => {
-    // face-api.js needs canvas — ignore it in browser builds
     config.resolve.alias["canvas"] = false;
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      encoding: false,
+    };
     return config;
   },
 };
