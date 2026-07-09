@@ -13,14 +13,15 @@ export interface FaceResult {
   maxFaceAreaPct: number;
 }
 
-const MIN_FACE_AREA_PCT = 1.0;
+const MIN_FACE_AREA_PCT = 0.5;
 const ASPECT_MIN = 0.5;
 const ASPECT_MAX = 2.0;
 
 export async function detectFaces(imgEl: HTMLImageElement): Promise<FaceResult> {
   const faceapi = await import("face-api.js");
 
-  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.6 });
+  // 224 gives faces ~40% more pixels than 160 — critical for half-body shots
+  const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.45 });
   const detections = await faceapi.detectAllFaces(imgEl, options);
 
   if (detections.length === 0) return { faceCount: 0, maxFaceAreaPct: 0 };
