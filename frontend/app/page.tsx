@@ -333,22 +333,19 @@ export default function Home() {
             </button>
           ))}
         </div>
-        {/* Intel button — top right */}
-        <button onClick={() => setActiveTab(activeTab === "intel" ? "briefing" : "intel")}
-          className="px-4 py-1.5 text-xs tracking-[0.25em] font-mono rounded transition-all"
-          style={{
-            color: activeTab === "intel" ? "#FF6B35" : "rgba(255,255,255,0.3)",
-            border: activeTab === "intel" ? "1px solid rgba(255,107,53,0.6)" : "1px solid rgba(255,255,255,0.1)",
-            background: activeTab === "intel" ? "rgba(255,107,53,0.08)" : "transparent",
-          }}>
-          {activeTab === "intel" ? "← BACK" : "◈ SCANNER"}
-        </button>
+        {activeTab === "intel" && (
+          <button onClick={() => setActiveTab("briefing")}
+            className="px-2 py-1 text-[10px] tracking-[0.15em] font-mono rounded transition-all"
+            style={{ color: "#FF6B35", border: "1px solid rgba(255,107,53,0.4)", background: "rgba(255,107,53,0.06)" }}>
+            ← BACK
+          </button>
+        )}
       </div>
 
       <main className="relative z-10 flex-1 flex flex-col items-center px-4 py-8">
 
         {/* ── BRIEFING TAB ── */}
-        {activeTab === "briefing" && <BriefingTab />}
+        {activeTab === "briefing" && <BriefingTab onOpenScanner={() => setActiveTab("intel")} />}
 
         {/* ── FRIENDS TAB ── */}
         {activeTab === "friends" && <FriendsTab />}
