@@ -7,14 +7,17 @@ import ScanProgress from "@/components/ScanProgress";
 import DossierCard from "@/components/DossierCard";
 import SubjectProfile from "@/components/SubjectProfile";
 import ScanLoader from "@/components/ScanLoader";
+import BriefingTab from "@/components/BriefingTab";
+import FriendsTab from "@/components/FriendsTab";
 import { fetchProfile, proxyUrl, connectInstagram } from "@/lib/api";
 import { loadModels, detectFaces, loadImageElement } from "@/lib/faceDetection";
 import { scorePost } from "@/lib/scoring";
-import { clusterFaces, findMainSubject, getMainSubjectPostIndices } from "@/lib/clustering";
+import { clusterFaces, findMainSubject } from "@/lib/clustering";
 import type { ScoredPost } from "@/lib/scoring";
 import type { FaceResult } from "@/lib/faceDetection";
 import type { RawPost } from "@/lib/api";
 
+type Tab = "briefing" | "friends" | "intel";
 type AppState = "idle" | "fetching" | "loading-models" | "analyzing" | "clustering" | "complete" | "error";
 type AuthState = "idle" | "connecting" | "connected";
 
@@ -40,7 +43,9 @@ const BOOT_LINES = [
 
 const SESSION_KEY = "jarvis_ig_session";
 
+
 export default function Home() {
+  const [activeTab, setActiveTab] = useState<Tab>("briefing");
   const [appState, setAppState] = useState<AppState>("idle");
   const [authState, setAuthState] = useState<AuthState>("idle");
   const [username, setUsername] = useState("");
@@ -50,8 +55,10 @@ export default function Home() {
   const [analyzeProgress, setAnalyzeProgress] = useState({ current: 0, total: 0, found: 0, status: "" });
   const [clusterStatus, setClusterStatus] = useState("");
   const [results, setResults] = useState<ScoredPost[]>([]);
+  const [rawPosts, setRawPosts] = useState<RawPost[]>([]);
   const [visibleResults, setVisibleResults] = useState(0);
   const [subjectInfo, setSubjectInfo] = useState<SubjectInfo | null>(null);
+  const [scanSummary, setScanSummary] = useState<{ total: number; from: string; to: string } | null>(null);
   const abortRef = useRef(false);
 
   useEffect(() => {
@@ -101,13 +108,13 @@ export default function Home() {
     if (!handle || !sessionId) return;
 
     abortRef.current = false;
-    setError(""); setResults([]); setVisibleResults(0); setSubjectInfo(null);
+    setError(""); setResults([]); setRawPosts([]); setVisibleResults(0); setSubjectInfo(null); setScanSummary(null);
 
-    // ── Phase 1: Fetch posts ──
+    // ── Phase 1: Fetch posts (cached) ──
     setAppState("fetching");
     speak(`Initiating scan on ${handle}.`);
 
-    let posts;
+    let posts: RawPost[];
     try {
       const data = await fetchProfile(handle, sessionId);
       posts = data.posts;
@@ -121,6 +128,15 @@ export default function Home() {
         setError(msg);
       }
       setAppState("error"); return;
+    }
+
+    setRawPosts(posts);
+    if (posts.length > 0) {
+      const times = posts.map(p => new Date(p.timestamp).getTime()).filter(t => !isNaN(t));
+      if (times.length > 0) {
+        const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", year: "numeric" }).toUpperCase();
+        setScanSummary({ total: posts.length, from: fmt(new Date(Math.min(...times))), to: fmt(new Date(Math.max(...times))) });
+      }
     }
 
     // ── Phase 2: Load models ──
@@ -151,7 +167,7 @@ export default function Home() {
             const faceResult = await detectFaces(img);
             analyses.push({ post, faceResult, proxiedUrl: proxied });
           } catch {
-            analyses.push({ post, faceResult: { faceCount: 0, maxFaceAreaPct: 0, descriptors: [] }, proxiedUrl: proxied });
+            analyses.push({ post, faceResult: { hasPerson: false, faceCount: 0, maxFaceAreaPct: 0, descriptors: [] }, proxiedUrl: proxied });
           }
         })
       );
@@ -166,60 +182,110 @@ export default function Home() {
       });
     }
 
-    // ── Phase 4: Cluster faces → identify main subject ──
+    // ── Phase 4: Cluster faces → pick person who appears most ──
     setAppState("clustering");
     setClusterStatus("BUILDING BIOMETRIC CLUSTERS...");
     speak("Identifying primary subject.");
 
     await new Promise(r => setTimeout(r, 100)); // yield to render
 
-    // Build descriptor entries
-    const entries: { descriptor: Float32Array; postIndex: number }[] = [];
+    let filteredAnalyses: PostAnalysis[];
+    let bestPhotoUrl = "";
+    let localSubjectInfo: SubjectInfo | null = null;
+    let localClusterStatus = "";
+
+    function euclidean(a: Float32Array, b: Float32Array): number {
+      let sum = 0;
+      for (let i = 0; i < a.length; i++) sum += (a[i] - b[i]) ** 2;
+      return Math.sqrt(sum);
+    }
+
+    // Step 1: Identify subject using FACE-tier solo shots (close-up = most reliable descriptors)
+    const faceTierSoloEntries: { descriptor: Float32Array; postIndex: number }[] = [];
     analyses.forEach((a, idx) => {
-      for (const d of a.faceResult.descriptors) {
-        entries.push({ descriptor: d, postIndex: idx });
+      if (a.faceResult.faceCount === 1 && a.faceResult.maxFaceAreaPct >= 10) {
+        faceTierSoloEntries.push({ descriptor: a.faceResult.descriptors[0], postIndex: idx });
       }
     });
 
-    const clusters = clusterFaces(entries);
-    const mainCluster = findMainSubject(clusters);
+    // Fall back to all solo shots if no close-up solos
+    const allSoloEntries: { descriptor: Float32Array; postIndex: number }[] = [];
+    analyses.forEach((a, idx) => {
+      if (a.faceResult.faceCount === 1) {
+        allSoloEntries.push({ descriptor: a.faceResult.descriptors[0], postIndex: idx });
+      }
+    });
 
-    let filteredAnalyses: PostAnalysis[];
-    let bestPhotoUrl = "";
+    const clusterEntries = faceTierSoloEntries.length > 0 ? faceTierSoloEntries : allSoloEntries;
 
-    if (mainCluster && new Set(mainCluster.postIndices).size >= 2) {
-      // Found a clear main subject
-      const mainIndices = getMainSubjectPostIndices(mainCluster);
-      filteredAnalyses = analyses.filter((_, i) => mainIndices.has(i) && analyses[i].faceResult.faceCount > 0);
+    // Fall back to all faces if no solo photos at all
+    const fallbackEntries = clusterEntries.length > 0 ? clusterEntries : (() => {
+      const all: { descriptor: Float32Array; postIndex: number }[] = [];
+      analyses.forEach((a, idx) => { for (const d of a.faceResult.descriptors) all.push({ descriptor: d, postIndex: idx }); });
+      return all;
+    })();
 
-      // Best photo = highest face coverage from main cluster posts
-      const bestAnalysis = filteredAnalyses.reduce((best, a) =>
-        a.faceResult.maxFaceAreaPct > best.faceResult.maxFaceAreaPct ? a : best
+    const clusters = clusterFaces(fallbackEntries);
+
+    const postFaceCounts = new Map<number, number>();
+    analyses.forEach((a, idx) => {
+      if (a.faceResult.faceCount > 0) postFaceCounts.set(idx, a.faceResult.faceCount);
+    });
+
+    const mainCluster = findMainSubject(clusters, postFaceCounts);
+
+    // Step 2: Match all solo photos (any tier) against the identified centroid
+    // Looser threshold (0.6) catches same person in half-body/full-body shots
+    const MATCH_THRESHOLD = 0.65;
+    const mainFaceAnalyses = mainCluster
+      ? analyses.filter(a =>
+          a.faceResult.faceCount === 1 &&
+          a.faceResult.descriptors.some(d => euclidean(d, mainCluster.centroid) < MATCH_THRESHOLD)
+        )
+      : [];
+
+    // Fallback: if clustering finds no subject, show all solo face photos
+    const allFaceAnalyses = analyses.filter(a => a.faceResult.faceCount === 1);
+    filteredAnalyses = mainFaceAnalyses.length > 0 ? mainFaceAnalyses : allFaceAnalyses;
+
+    if (mainCluster && mainFaceAnalyses.length > 0) {
+      const best = mainFaceAnalyses.reduce((b, a) =>
+        a.faceResult.maxFaceAreaPct > b.faceResult.maxFaceAreaPct ? a : b
       );
-      bestPhotoUrl = bestAnalysis.proxiedUrl;
-
-      setSubjectInfo({
-        appearances: new Set(mainCluster.postIndices).size,
-        totalScanned: analyses.length,
-        bestPhotoUrl,
-      });
-
-      setClusterStatus(`PRIMARY SUBJECT IDENTIFIED — ${new Set(mainCluster.postIndices).size} APPEARANCES ACROSS ${clusters.length} UNIQUE FACES`);
-      speak(`Primary subject identified. ${new Set(mainCluster.postIndices).size} appearances detected.`);
+      bestPhotoUrl = best.proxiedUrl;
+      const appearances = mainFaceAnalyses.length;
+      localSubjectInfo = { appearances, totalScanned: analyses.length, bestPhotoUrl };
+      localClusterStatus = `PRIMARY SUBJECT IDENTIFIED — ${appearances} APPEARANCES ACROSS ${clusters.length} UNIQUE FACES`;
+      setSubjectInfo(localSubjectInfo);
+      setClusterStatus(localClusterStatus);
+      speak(`Primary subject identified. ${appearances} appearances detected.`);
+    } else if (allFaceAnalyses.length > 0) {
+      const best = allFaceAnalyses.reduce((b, a) =>
+        a.faceResult.maxFaceAreaPct > b.faceResult.maxFaceAreaPct ? a : b
+      );
+      bestPhotoUrl = best.proxiedUrl;
+      localSubjectInfo = { appearances: allFaceAnalyses.length, totalScanned: analyses.length, bestPhotoUrl };
+      localClusterStatus = `${allFaceAnalyses.length} PHOTOS WITH FACES DETECTED`;
+      setSubjectInfo(localSubjectInfo);
+      setClusterStatus(localClusterStatus);
+      speak(`${allFaceAnalyses.length} photos with faces detected.`);
     } else {
-      // No dominant subject — fall back to all posts with faces
-      filteredAnalyses = analyses.filter(a => a.faceResult.faceCount > 0);
-      setClusterStatus("NO DOMINANT SUBJECT FOUND — SHOWING ALL DETECTED SUBJECTS");
+      localClusterStatus = "NO FACES DETECTED";
+      setClusterStatus(localClusterStatus);
     }
 
     await new Promise(r => setTimeout(r, 800)); // show cluster status briefly
 
     // ── Phase 5: Score + rank top 10 ──
+    const SUBJECT_ORDER: Record<string, number> = { FACE: 0, HALF_BODY: 1, FULL_BODY: 2, NONE: 3 };
     const scored: ScoredPost[] = filteredAnalyses
       .map(a => scorePost(a.post, a.faceResult, a.proxiedUrl))
       .filter(p => p.subjectType !== "NONE")
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 10);
+      .sort((a, b) => {
+        const typeDiff = SUBJECT_ORDER[a.subjectType] - SUBJECT_ORDER[b.subjectType];
+        return typeDiff !== 0 ? typeDiff : b.score - a.score;
+      })
+;
 
     setResults(scored);
     setAppState("complete");
@@ -233,8 +299,8 @@ export default function Home() {
 
   const handleReset = () => {
     abortRef.current = true;
-    setAppState("idle"); setResults([]); setVisibleResults(0);
-    setError(""); setSubjectInfo(null); setBootLines([]);
+    setAppState("idle"); setResults([]); setRawPosts([]); setVisibleResults(0);
+    setError(""); setSubjectInfo(null); setScanSummary(null); setBootLines([]);
     setTimeout(() => {
       let i = 0;
       const id = setInterval(() => {
@@ -249,14 +315,53 @@ export default function Home() {
       <JarvisBackground />
       <StatusBar />
 
+      {/* Tab navigation */}
+      <div className="relative z-10 flex items-center border-b font-mono px-4"
+        style={{ borderColor: "rgba(0,212,255,0.12)" }}>
+        {/* Main tabs */}
+        <div className="flex flex-1">
+          {(["briefing", "friends"] as Tab[]).map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className="px-8 py-2.5 text-xs tracking-[0.3em] transition-all"
+              style={{
+                color: activeTab === tab ? "#00D4FF" : "rgba(255,255,255,0.25)",
+                background: activeTab === tab ? "rgba(0,212,255,0.04)" : "transparent",
+                borderBottom: activeTab === tab ? "2px solid #00D4FF" : "2px solid transparent",
+                marginBottom: "-1px",
+              }}>
+              {tab.toUpperCase()}
+            </button>
+          ))}
+        </div>
+        {/* Intel button — top right */}
+        <button onClick={() => setActiveTab(activeTab === "intel" ? "briefing" : "intel")}
+          className="px-4 py-1.5 text-xs tracking-[0.25em] font-mono rounded transition-all"
+          style={{
+            color: activeTab === "intel" ? "#FF6B35" : "rgba(255,255,255,0.3)",
+            border: activeTab === "intel" ? "1px solid rgba(255,107,53,0.6)" : "1px solid rgba(255,255,255,0.1)",
+            background: activeTab === "intel" ? "rgba(255,107,53,0.08)" : "transparent",
+          }}>
+          {activeTab === "intel" ? "← BACK" : "◈ SCANNER"}
+        </button>
+      </div>
+
       <main className="relative z-10 flex-1 flex flex-col items-center px-4 py-8">
+
+        {/* ── BRIEFING TAB ── */}
+        {activeTab === "briefing" && <BriefingTab />}
+
+        {/* ── FRIENDS TAB ── */}
+        {activeTab === "friends" && <FriendsTab />}
+
+        {/* ── INTEL TAB ── */}
+        {activeTab === "intel" && <>
 
         {/* ── IDLE / ERROR ── */}
         {(appState === "idle" || appState === "error") && (
           <div className="w-full max-w-2xl mx-auto mt-8 flex flex-col items-center gap-8">
             <div className="text-center space-y-2">
-              <h1 className="text-5xl font-bold tracking-[0.4em] glow-cyan glitch-text" data-text="J.A.R.V.I.S">
-                J.A.R.V.I.S
+              <h1 className="text-5xl font-bold tracking-[0.4em] glow-cyan glitch-text" data-text="JOHNNY.AI">
+                JOHNNY.AI
               </h1>
               <p className="text-jarvis-text opacity-50 text-sm tracking-widest">
                 INSTAGRAM SUBJECT IDENTIFICATION SYSTEM
@@ -336,7 +441,7 @@ export default function Home() {
               {[
                 { icon: "◎", label: "FACE PRIORITY", desc: "Close-up shots ranked highest" },
                 { icon: "◫", label: "SUBJECT FILTER", desc: "Only the account owner shown" },
-                { icon: "◈", label: "TOP 10", desc: "Best subject photos only" },
+                { icon: "◈", label: "ALL PHOTOS", desc: "Every photo of the subject" },
               ].map(({ icon, label, desc }) => (
                 <div key={label} className="border-glow rounded p-3 space-y-1">
                   <div className="glow-cyan text-lg">{icon}</div>
@@ -405,6 +510,7 @@ export default function Home() {
                 <h2 className="glow-cyan text-xl font-bold tracking-widest">SCAN COMPLETE</h2>
                 <p className="text-jarvis-text opacity-50 text-xs mt-1 tracking-widest">
                   @{username.replace(/^@/, "")} — {results.length} PRIORITY PHOTOS
+                  {scanSummary && ` · SCANNED ${scanSummary.total} POSTS · ${scanSummary.from} – ${scanSummary.to}`}
                 </p>
               </div>
               <button onClick={handleReset} className="jarvis-btn px-4 py-2 text-xs tracking-widest">
@@ -421,8 +527,49 @@ export default function Home() {
             )}
 
             {results.length === 0 ? (
-              <div className="text-center py-20 text-jarvis-text opacity-40 tracking-widest">
-                NO SUBJECTS IDENTIFIED IN RECENT POSTS
+              <div className="w-full">
+                <p className="text-center text-jarvis-text opacity-40 tracking-widest mb-6 text-xs">
+                  NO SUBJECTS IDENTIFIED — SHOWING {Math.min(rawPosts.length, 10)} MOST RECENT POSTS
+                </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                  {rawPosts.slice(0, 10).map((post) => {
+                    const proxied = proxyUrl(post.url);
+                    const date = new Date(post.timestamp).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+                    return (
+                      <div key={post.id} className="dossier-card rounded-lg overflow-hidden">
+                        <div className="flex items-center justify-between px-3 py-2 text-xs tracking-widest" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                          <span className="text-jarvis-text opacity-40">RECENT</span>
+                          {post.is_video && <span className="text-xs" style={{ color: "#FF6B35" }}>▶ REEL</span>}
+                        </div>
+                        <div className="relative aspect-square bg-black">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={proxied} alt="post" className="w-full h-full object-cover" />
+                          <div className="absolute top-1 left-1 w-3 h-3 border-t border-l opacity-40" style={{ borderColor: "#00D4FF" }} />
+                          <div className="absolute top-1 right-1 w-3 h-3 border-t border-r opacity-40" style={{ borderColor: "#00D4FF" }} />
+                          <div className="absolute bottom-1 left-1 w-3 h-3 border-b border-l opacity-40" style={{ borderColor: "#00D4FF" }} />
+                          <div className="absolute bottom-1 right-1 w-3 h-3 border-b border-r opacity-40" style={{ borderColor: "#00D4FF" }} />
+                        </div>
+                        <div className="p-3 space-y-1 text-xs font-mono">
+                          <div className="flex justify-between">
+                            <span className="text-jarvis-text opacity-40">DATE</span>
+                            <span className="text-jarvis-text">{date}</span>
+                          </div>
+                          {post.likes > 0 && (
+                            <div className="flex justify-between">
+                              <span className="text-jarvis-text opacity-40">LIKES</span>
+                              <span className="text-jarvis-text">{post.likes.toLocaleString()}</span>
+                            </div>
+                          )}
+                          <a href={post.post_url} target="_blank" rel="noopener noreferrer"
+                            className="block text-center pt-1 tracking-widest opacity-40 hover:opacity-80 transition-opacity"
+                            style={{ color: "#00D4FF" }}>
+                            VIEW POST →
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -450,6 +597,7 @@ export default function Home() {
             )}
           </div>
         )}
+        </>}
       </main>
     </div>
   );

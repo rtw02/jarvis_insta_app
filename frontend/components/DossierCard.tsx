@@ -90,15 +90,29 @@ export default function DossierCard({ post, rank, style }: Props) {
 
       {/* Metadata */}
       <div className="p-3 space-y-2 text-xs font-mono">
-        <div className="flex justify-between">
-          <span className="text-jarvis-text opacity-50">CONFIDENCE</span>
-          <span style={{ color }} className="font-bold">{confidence}%</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-jarvis-text opacity-50">COVERAGE</span>
-          <span className="text-jarvis-text">{post.faceAreaPct.toFixed(1)}%</span>
-        </div>
-        <div className="flex justify-between">
+        {/* Three score bars */}
+        {[
+          { label: "FRONTAL", value: post.frontalScore, color: "#00D4FF" },
+          { label: "FRAMING", value: post.framingScore, color: "#00FF88" },
+          { label: "CLARITY", value: post.clarityScore, color: "#FFB347" },
+        ].map(({ label, value, color: c }) => (
+          <div key={label}>
+            <div className="flex justify-between mb-0.5">
+              <span className="text-jarvis-text opacity-50">{label}</span>
+              <span className="font-bold" style={{ color: c }}>{value}%</span>
+            </div>
+            <div className="h-px w-full bg-white/5 rounded overflow-hidden">
+              <div className="h-full rounded" style={{
+                width: `${value}%`,
+                backgroundColor: c,
+                boxShadow: `0 0 4px ${c}`,
+                transition: "width 0.8s ease",
+              }} />
+            </div>
+          </div>
+        ))}
+
+        <div className="flex justify-between pt-1">
           <span className="text-jarvis-text opacity-50">DATE</span>
           <span className="text-jarvis-text">{date}</span>
         </div>
@@ -109,18 +123,19 @@ export default function DossierCard({ post, rank, style }: Props) {
           </div>
         )}
 
-        {/* Score bar */}
+        {/* Total score bar */}
         <div className="pt-1">
+          <div className="flex justify-between mb-0.5">
+            <span className="text-jarvis-text opacity-30">SCORE</span>
+            <span className="text-jarvis-text opacity-50 font-bold">{confidence}</span>
+          </div>
           <div className="h-px w-full bg-white/5 rounded overflow-hidden">
-            <div
-              className="h-full rounded"
-              style={{
-                width: `${Math.min(100, post.score)}%`,
-                backgroundColor: color,
-                boxShadow: `0 0 6px ${color}`,
-                transition: "width 0.8s ease",
-              }}
-            />
+            <div className="h-full rounded" style={{
+              width: `${Math.min(100, post.score)}%`,
+              backgroundColor: color,
+              boxShadow: `0 0 6px ${color}`,
+              transition: "width 0.8s ease",
+            }} />
           </div>
         </div>
 

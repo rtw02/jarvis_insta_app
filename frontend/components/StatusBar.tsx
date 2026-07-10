@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 export default function StatusBar() {
   const [time, setTime] = useState("");
+  const [claudeStatus, setClaudeStatus] = useState<"unknown" | "online" | "offline">("unknown");
 
   useEffect(() => {
     const tick = () => {
@@ -23,13 +24,28 @@ export default function StatusBar() {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const res = await fetch("https://status.anthropic.com/api/v2/status.json");
+        const data = await res.json();
+        setClaudeStatus(data.status?.indicator === "none" ? "online" : "offline");
+      } catch {
+        setClaudeStatus("offline");
+      }
+    };
+    check();
+    const id = setInterval(check, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <header className="relative z-10 border-b border-jarvis-border bg-jarvis-bg/80 backdrop-blur-sm">
       <div className="flex items-center justify-between px-6 py-3 text-xs font-mono">
         {/* Left */}
         <div className="flex items-center gap-6">
           <span className="glow-cyan text-base font-bold tracking-[0.3em]">
-            J.A.R.V.I.S
+            RYAN.AI
           </span>
           <div className="flex items-center gap-2">
             <span
@@ -45,7 +61,13 @@ export default function StatusBar() {
         <div className="hidden md:flex items-center gap-8 text-jarvis-text opacity-60">
           <span>NEURAL: <span className="text-cyan-jarvis">98.2%</span></span>
           <span>VISION: <span className="text-cyan-jarvis">ACTIVE</span></span>
-          <span>CORES: <span className="text-cyan-jarvis">12</span></span>
+          <span>CLAUDE:{" "}
+            <span style={{
+              color: claudeStatus === "online" ? "#00D4FF" : claudeStatus === "offline" ? "#FF6B35" : "#666",
+            }}>
+              {claudeStatus === "online" ? "ONLINE" : claudeStatus === "offline" ? "OFFLINE" : "..."}
+            </span>
+          </span>
         </div>
 
         {/* Right */}

@@ -28,7 +28,7 @@ function computeCentroid(descriptors: Float32Array[]): Float32Array {
 
 export function clusterFaces(
   entries: DescriptorEntry[],
-  threshold = 0.6
+  threshold = 0.5
 ): FaceCluster[] {
   const clusters: FaceCluster[] = [];
 
@@ -61,14 +61,27 @@ export function clusterFaces(
   return clusters;
 }
 
-export function findMainSubject(clusters: FaceCluster[]): FaceCluster | null {
+export function findMainSubject(
+  clusters: FaceCluster[],
+  postFaceCounts: Map<number, number>
+): FaceCluster | null {
   if (clusters.length === 0) return null;
-  // Count unique posts per cluster (not raw appearances, which can double-count group shots)
+
   return clusters.reduce((best, c) => {
-    const uniquePosts = new Set(c.postIndices).size;
-    const bestUnique = new Set(best.postIndices).size;
-    return uniquePosts > bestUnique ? c : best;
+    const score = subjectScore(c, postFaceCounts);
+    const bestScore = subjectScore(best, postFaceCounts);
+    return score > bestScore ? c : best;
   });
+}
+
+function subjectScore(c: FaceCluster, postFaceCounts: Map<number, number>): number {
+  const uniquePosts = new Set(c.postIndices);
+  let soloCount = 0;
+  uniquePosts.forEach(postIdx => {
+    if ((postFaceCounts.get(postIdx) ?? 1) === 1) soloCount++;
+  });
+  // Solo appearances weighted 2x — person who appears alone is likely the account owner
+  return soloCount * 2 + (uniquePosts.size - soloCount);
 }
 
 export function getMainSubjectPostIndices(cluster: FaceCluster): Set<number> {

@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 
 import httpx
@@ -8,6 +9,13 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from scraper import scrape_profile
+
+# Load .env if present
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,7 +56,7 @@ class ScrapeRequest(BaseModel):
 
 @app.get("/health")
 async def health():
-    return {"status": "ONLINE", "system": "JARVIS"}
+    return {"status": "ONLINE", "system": "RYAN.AI"}
 
 
 @app.post("/scrape")
@@ -60,7 +68,9 @@ async def scrape(req: ScrapeRequest):
     session_id = req.session_id.strip() or None
     log.info(f"[SCRAPE] target=@{username} authenticated={bool(session_id)}")
     try:
-        posts = scrape_profile(username, session_id=session_id)
+        result = scrape_profile(username, session_id=session_id)
+        posts = result["posts"]
+        profile_pic_url = result.get("profile_pic_url")
         log.info(f"[SCRAPE] @{username} → {len(posts)} posts fetched")
     except ValueError as e:
         log.warning(f"[SCRAPE] @{username} failed: {e}")
@@ -69,7 +79,7 @@ async def scrape(req: ScrapeRequest):
         log.error(f"[SCRAPE] @{username} error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Scrape failed: {str(e)}")
 
-    return {"username": username, "total": len(posts), "posts": posts}
+    return {"username": username, "total": len(posts), "posts": posts, "profile_pic_url": profile_pic_url}
 
 
 @app.get("/proxy")
@@ -156,6 +166,38 @@ async def auth_instagram():
     except Exception as e:
         log.error(f"[AUTH] Playwright error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Auth failed: {str(e)}")
+
+
+@app.get("/imessage")
+async def get_imessage():
+    try:
+        from imessage import get_contacts
+        contacts = get_contacts()
+        log.info(f"[iMESSAGE] {len(contacts)} contacts returned")
+        return {"contacts": contacts}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        log.error(f"[iMESSAGE] error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/birthdays")
+async def get_birthdays(days: int = 90):
+    try:
+        from birthdays import get_upcoming_birthdays
+        bdays = get_upcoming_birthdays(days_ahead=days)
+        log.info(f"[BIRTHDAYS] {len(bdays)} upcoming in {days} days")
+        return {"birthdays": bdays}
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        log.error(f"[BIRTHDAYS] error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":

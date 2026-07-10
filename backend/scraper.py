@@ -31,7 +31,7 @@ def _load_session(L: instaloader.Instaloader, session_id: str | None) -> None:
     )
 
 
-def scrape_profile(username: str, session_id: str | None = None, max_posts: int = 300) -> list[dict]:
+def scrape_profile(username: str, session_id: str | None = None, max_posts: int = 300) -> dict:
     L = instaloader.Instaloader(
         download_pictures=False,
         download_videos=False,
@@ -54,13 +54,13 @@ def scrape_profile(username: str, session_id: str | None = None, max_posts: int 
     if profile.is_private:
         raise ValueError(f"Profile '{username}' is private")
 
-    for days in (180, 548):  # 6 months → fallback 1.5 years
+    for days in (365, 730):  # 1 year → fallback 2 years
         cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
         posts = _collect_posts(profile, cutoff, max_posts)
         if posts:
             break
 
-    return posts
+    return {"posts": posts, "profile_pic_url": profile.profile_pic_url}
 
 
 def _collect_posts(profile, cutoff, max_posts: int) -> list[dict]:

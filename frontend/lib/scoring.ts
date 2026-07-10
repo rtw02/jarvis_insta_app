@@ -9,6 +9,9 @@ export interface ScoredPost extends RawPost {
   faceCount: number;
   faceAreaPct: number;
   proxiedUrl: string;
+  frontalScore: number;  // 0-100
+  framingScore: number;  // 0-100
+  clarityScore: number;  // 0-100
 }
 
 export function scorePost(
@@ -16,31 +19,48 @@ export function scorePost(
   result: FaceResult,
   proxiedUrl: string
 ): ScoredPost {
-  const { faceCount, maxFaceAreaPct } = result;
+  const { faceCount, maxFaceAreaPct, bestFace } = result;
 
-  let score = 0;
-  let subjectType: SubjectType = "NONE";
-
-  if (faceCount > 0) {
-    if (maxFaceAreaPct >= 14) {
-      subjectType = "FACE";
-      score = 100 + maxFaceAreaPct;
-    } else if (maxFaceAreaPct >= 4) {
-      subjectType = "HALF_BODY";
-      score = 75 + maxFaceAreaPct;
-    } else {
-      subjectType = "FULL_BODY";
-      score = 50 + maxFaceAreaPct;
-    }
+  // No face/eyes detected → filter out
+  if (faceCount === 0) {
+    return {
+      ...post, proxiedUrl, score: 0, subjectType: "NONE",
+      faceCount: 0, faceAreaPct: 0,
+      frontalScore: 0, framingScore: 0, clarityScore: 0,
+    };
   }
 
+  let frontalScore = 50;
+  let framingScore = 50;
+  let clarityScore = 50;
+
+  if (bestFace) {
+    frontalScore = Math.round(bestFace.frontalScore * 100);
+    framingScore = Math.round(bestFace.framingScore * 100);
+    clarityScore = Math.round(bestFace.confidence * 100);
+  } else {
+    // Fallback: derive rough scores from area
+    const areaClamp = Math.min(maxFaceAreaPct / 30, 1);
+    framingScore = Math.round(areaClamp * 80);
+  }
+
+  // Weighted total: forward-facing is primary signal
+  const score = Math.round(
+    frontalScore * 0.50 +
+    framingScore * 0.30 +
+    clarityScore * 0.20
+  );
+
+  // Subject type based on how much of the image the face occupies
+  let subjectType: SubjectType;
+  if (maxFaceAreaPct >= 10) subjectType = "FACE";        // close-up portrait
+  else if (maxFaceAreaPct >= 2) subjectType = "HALF_BODY"; // face visible + body
+  else subjectType = "FULL_BODY";                          // small face, full body
+
   return {
-    ...post,
-    score,
-    subjectType,
-    faceCount,
-    faceAreaPct: maxFaceAreaPct,
-    proxiedUrl,
+    ...post, proxiedUrl, score, subjectType,
+    faceCount, faceAreaPct: maxFaceAreaPct,
+    frontalScore, framingScore, clarityScore,
   };
 }
 

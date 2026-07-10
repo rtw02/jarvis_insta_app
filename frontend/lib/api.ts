@@ -15,6 +15,7 @@ export interface ScrapeResult {
   username: string;
   total: number;
   posts: RawPost[];
+  profile_pic_url?: string;
 }
 
 export async function fetchProfile(username: string, sessionId: string): Promise<ScrapeResult> {
