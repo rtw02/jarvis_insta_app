@@ -13,13 +13,19 @@ import { fetchProfile, proxyUrl, connectInstagram } from "@/lib/api";
 import { loadModels, detectFaces, loadImageElement } from "@/lib/faceDetection";
 import { scorePost } from "@/lib/scoring";
 import { clusterFaces, findMainSubject } from "@/lib/clustering";
+import { loadGoogleScript, requestGoogleToken, fetchUserInfo, saveToken, loadToken } from "@/lib/google";
 import type { ScoredPost } from "@/lib/scoring";
 import type { FaceResult } from "@/lib/faceDetection";
 import type { RawPost } from "@/lib/api";
 
+const ALLOWED_EMAIL = "rtwong02@gmail.com";
+const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
+const GATE_EMAIL_KEY = "jarvis_gate_email";
+
 type Tab = "briefing" | "friends" | "intel";
 type AppState = "idle" | "fetching" | "loading-models" | "analyzing" | "clustering" | "complete" | "error";
 type AuthState = "idle" | "connecting" | "connected";
+type GateState = "checking" | "login" | "denied" | "granted";
 
 interface PostAnalysis {
   post: RawPost;
@@ -45,6 +51,8 @@ const SESSION_KEY = "jarvis_ig_session";
 
 
 export default function Home() {
+  const [gateState, setGateState] = useState<GateState>("checking");
+  const [gateError, setGateError] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("briefing");
   const [appState, setAppState] = useState<AppState>("idle");
   const [authState, setAuthState] = useState<AuthState>("idle");
@@ -65,6 +73,44 @@ export default function Home() {
     const saved = localStorage.getItem(SESSION_KEY);
     if (saved) { setSessionId(saved); setAuthState("connected"); }
   }, []);
+
+  // ── Auth gate: verify Google identity on load ──
+  useEffect(() => {
+    const cachedEmail = sessionStorage.getItem(GATE_EMAIL_KEY);
+    if (cachedEmail === ALLOWED_EMAIL) { setGateState("granted"); return; }
+    const token = loadToken();
+    if (!token) { setGateState("login"); return; }
+    fetchUserInfo(token)
+      .then(u => {
+        if (u.email === ALLOWED_EMAIL) {
+          sessionStorage.setItem(GATE_EMAIL_KEY, u.email);
+          setGateState("granted");
+        } else {
+          setGateState("denied");
+        }
+      })
+      .catch(() => setGateState("login"));
+  }, []);
+
+  const handleGoogleLogin = async () => {
+    setGateError("");
+    try {
+      await loadGoogleScript();
+      const token = await requestGoogleToken(CLIENT_ID);
+      saveToken(token);
+      const user = await fetchUserInfo(token);
+      if (user.email === ALLOWED_EMAIL) {
+        sessionStorage.setItem(GATE_EMAIL_KEY, user.email);
+        setGateState("granted");
+      } else {
+        setGateState("denied");
+        setGateError(`Access denied for ${user.email}`);
+      }
+    } catch (e) {
+      setGateError(e instanceof Error ? e.message : "Login failed");
+      setGateState("login");
+    }
+  };
 
   useEffect(() => {
     let i = 0;
@@ -309,6 +355,42 @@ export default function Home() {
       }, 280);
     }, 100);
   };
+
+  if (gateState === "checking") {
+    return (
+      <div className="relative min-h-screen flex items-center justify-center">
+        <JarvisBackground />
+        <span className="font-mono text-xs tracking-widest animate-pulse" style={{ color: "rgba(0,212,255,0.4)" }}>VERIFYING...</span>
+      </div>
+    );
+  }
+
+  if (gateState === "login" || gateState === "denied") {
+    return (
+      <div className="relative min-h-screen flex flex-col items-center justify-center gap-6">
+        <JarvisBackground />
+        <h1 className="font-mono text-3xl font-bold tracking-[0.4em] glow-cyan">RYAN.AI</h1>
+        <p className="font-mono text-xs tracking-widest opacity-40" style={{ color: "rgba(255,255,255,0.6)" }}>AUTHORIZED ACCESS ONLY</p>
+        {gateState === "denied" ? (
+          <div className="font-mono text-xs tracking-widest text-center space-y-3">
+            <p style={{ color: "#FF6B35" }}>ACCESS DENIED</p>
+            {gateError && <p className="opacity-50" style={{ color: "#FF6B35" }}>{gateError}</p>}
+          </div>
+        ) : (
+          <button onClick={handleGoogleLogin}
+            className="px-6 py-3 font-mono text-xs tracking-widest rounded transition-all"
+            style={{ border: "1px solid rgba(0,212,255,0.4)", color: "#00D4FF", background: "rgba(0,212,255,0.06)" }}
+            onMouseOver={e => (e.currentTarget.style.background = "rgba(0,212,255,0.12)")}
+            onMouseOut={e => (e.currentTarget.style.background = "rgba(0,212,255,0.06)")}>
+            ◉ SIGN IN WITH GOOGLE
+          </button>
+        )}
+        {gateError && gateState === "login" && (
+          <p className="font-mono text-xs opacity-40" style={{ color: "#FF6B35" }}>{gateError}</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen flex flex-col">
