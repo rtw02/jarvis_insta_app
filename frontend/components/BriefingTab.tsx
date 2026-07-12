@@ -5,6 +5,7 @@ import WeatherWidget from "./WeatherWidget";
 import CalendarWidget from "./CalendarWidget";
 import CommuteWidget from "./CommuteWidget";
 import BirthdayWidget from "./BirthdayWidget";
+import TiltCard from "./TiltCard";
 import {
   loadGoogleScript, requestGoogleToken, fetchUserInfo,
   fetchTodayEvents, fetchRecentEvents,
@@ -26,6 +27,8 @@ function timeOfDay(): string {
   if (h < 17) return "afternoon";
   return "evening";
 }
+
+const isIphone = typeof navigator !== "undefined" && /iPhone/i.test(navigator.userAgent);
 
 export default function BriefingTab({ onOpenScanner }: { onOpenScanner?: () => void }) {
   const [authState, setAuthState] = useState<AuthState>("idle");
@@ -185,10 +188,10 @@ export default function BriefingTab({ onOpenScanner }: { onOpenScanner?: () => v
       </div>
 
       {/* Daily greeting */}
-      <div className="border-glow-active rounded-lg p-5" style={{ background: "rgba(0,212,255,0.03)" }}>
+      <TiltCard className="boot-in border-glow-active rounded-lg p-5" style={{ background: "rgba(0,212,255,0.03)", animationDelay: "0.1s" }}>
         <div className="flex items-start justify-between">
           <div className="text-cyan-jarvis opacity-40 text-xs tracking-widest font-mono mb-3">// DAILY BRIEFING</div>
-          {onOpenScanner && (
+          {onOpenScanner && !isIphone && (
             <button onClick={onOpenScanner}
               className="text-[10px] font-mono tracking-widest px-2 py-0.5 rounded transition-opacity opacity-20 hover:opacity-50"
               style={{ border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.6)" }}>
@@ -199,19 +202,19 @@ export default function BriefingTab({ onOpenScanner }: { onOpenScanner?: () => v
         <p className="text-sm font-mono leading-relaxed" style={{ color: "rgba(255,255,255,0.85)" }}>
           {greeting}
         </p>
-      </div>
+      </TiltCard>
 
       {/* Two-widget row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <WeatherWidget />
-        <CalendarWidget events={events} loading={calLoading} />
+        <TiltCard className="boot-in" style={{ animationDelay: "0.2s" }}><WeatherWidget /></TiltCard>
+        <TiltCard className="boot-in" style={{ animationDelay: "0.3s" }}><CalendarWidget events={events} loading={calLoading} /></TiltCard>
       </div>
 
       {/* Commute times for events with locations */}
-      <CommuteWidget events={events} />
+      <TiltCard className="boot-in" style={{ animationDelay: "0.4s" }}><CommuteWidget events={events} /></TiltCard>
 
       {/* Upcoming birthdays */}
-      <BirthdayWidget />
+      <TiltCard className="boot-in" style={{ animationDelay: "0.5s" }}><BirthdayWidget /></TiltCard>
 
       {/* Debug / error row */}
       {(calError || calDebug) && (

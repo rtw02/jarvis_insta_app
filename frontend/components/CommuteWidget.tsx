@@ -100,14 +100,14 @@ let leafletLoaded: Promise<any> | null = null;
 function loadLeaflet(): Promise<any> {
   if (leafletLoaded) return leafletLoaded;
   leafletLoaded = new Promise(resolve => {
-    if ((window as unknown as Record<string, unknown>)["L"]) { resolve((window as Record<string, unknown>)["L"]); return; }
+    if ((window as unknown as Record<string, unknown>)["L"]) { resolve((window as unknown as Record<string, unknown>)["L"]); return; }
     const link = document.createElement("link");
     link.rel = "stylesheet";
     link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
     document.head.appendChild(link);
     const script = document.createElement("script");
     script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-    script.onload = () => resolve((window as Record<string, unknown>)["L"]);
+    script.onload = () => resolve((window as unknown as Record<string, unknown>)["L"]);
     document.head.appendChild(script);
   });
   return leafletLoaded;

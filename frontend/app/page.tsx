@@ -9,6 +9,7 @@ import SubjectProfile from "@/components/SubjectProfile";
 import ScanLoader from "@/components/ScanLoader";
 import BriefingTab from "@/components/BriefingTab";
 import FriendsTab from "@/components/FriendsTab";
+import BootScreen from "@/components/BootScreen";
 import { fetchProfile, proxyUrl, connectInstagram } from "@/lib/api";
 import { loadModels, detectFaces, loadImageElement } from "@/lib/faceDetection";
 import { scorePost } from "@/lib/scoring";
@@ -21,6 +22,7 @@ import type { RawPost } from "@/lib/api";
 const ALLOWED_EMAIL = "rtwong02@gmail.com";
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 const GATE_EMAIL_KEY = "jarvis_gate_email";
+const BOOT_SHOWN_KEY = "jarvis_booted";
 
 type Tab = "briefing" | "friends" | "intel";
 type AppState = "idle" | "fetching" | "loading-models" | "analyzing" | "clustering" | "complete" | "error";
@@ -53,6 +55,7 @@ const SESSION_KEY = "jarvis_ig_session";
 export default function Home() {
   const [gateState, setGateState] = useState<GateState>("checking");
   const [gateError, setGateError] = useState("");
+  const [showBoot, setShowBoot] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("briefing");
   const [appState, setAppState] = useState<AppState>("idle");
   const [authState, setAuthState] = useState<AuthState>("idle");
@@ -91,6 +94,13 @@ export default function Home() {
       })
       .catch(() => setGateState("login"));
   }, []);
+
+  // Show boot screen once per session when gate is first passed
+  useEffect(() => {
+    if (gateState === "granted" && !sessionStorage.getItem(BOOT_SHOWN_KEY)) {
+      setShowBoot(true);
+    }
+  }, [gateState]);
 
   const handleGoogleLogin = async () => {
     setGateError("");
@@ -394,6 +404,12 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen flex flex-col">
+      {showBoot && (
+        <BootScreen onComplete={() => {
+          sessionStorage.setItem(BOOT_SHOWN_KEY, "1");
+          setShowBoot(false);
+        }} />
+      )}
       <JarvisBackground />
       <StatusBar />
 
@@ -427,7 +443,7 @@ export default function Home() {
       <main className="relative z-10 flex-1 flex flex-col items-center px-4 py-8">
 
         {/* ── BRIEFING TAB ── */}
-        {activeTab === "briefing" && <BriefingTab onOpenScanner={() => setActiveTab("intel")} />}
+        {activeTab === "briefing" && <BriefingTab onOpenScanner={/iPhone/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "") ? undefined : () => setActiveTab("intel")} />}
 
         {/* ── FRIENDS TAB ── */}
         {activeTab === "friends" && <FriendsTab />}

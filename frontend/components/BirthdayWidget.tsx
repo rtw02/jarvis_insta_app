@@ -13,7 +13,7 @@ export default function BirthdayWidget() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://localhost:8000/birthdays?days=90")
+    fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000"}/birthdays?days=60`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.birthdays) setBirthdays(d.birthdays); })
       .catch(() => {})

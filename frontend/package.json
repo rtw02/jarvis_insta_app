@@ -11,6 +11,8 @@
   "dependencies": {
     "@tensorflow-models/coco-ssd": "^2.2.3",
     "@tensorflow/tfjs": "^4.22.0",
+    "@types/d3": "^7.4.3",
+    "d3": "^7.9.0",
     "face-api.js": "^0.22.2",
     "next": "14.2.5",
     "react": "^18",
