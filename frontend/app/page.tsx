@@ -56,6 +56,7 @@ export default function Home() {
   const [gateState, setGateState] = useState<GateState>("checking");
   const [gateError, setGateError] = useState("");
   const [showBoot, setShowBoot] = useState(false);
+  const [loginStatus, setLoginStatus] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("briefing");
   const [appState, setAppState] = useState<AppState>("idle");
   const [authState, setAuthState] = useState<AuthState>("idle");
@@ -104,13 +105,15 @@ export default function Home() {
 
   const handleGoogleLogin = async () => {
     setGateError("");
+    setLoginStatus("LOADING SDK...");
     try {
       await loadGoogleScript();
+      setLoginStatus("REQUESTING TOKEN...");
       const token = await requestGoogleToken(CLIENT_ID);
-      console.log("[AUTH] token obtained:", !!token);
+      setLoginStatus("FETCHING USER INFO...");
       saveToken(token);
       const user = await fetchUserInfo(token);
-      console.log("[AUTH] user email:", user?.email);
+      setLoginStatus(`GOT: ${user.email}`);
       if (user.email === ALLOWED_EMAIL) {
         sessionStorage.setItem(GATE_EMAIL_KEY, user.email);
         setGateState("granted");
@@ -120,7 +123,7 @@ export default function Home() {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      console.error("[AUTH] error:", msg, e);
+      setLoginStatus(`FAILED: ${msg}`);
       setGateError(msg);
       setGateState("login");
     }
@@ -399,9 +402,15 @@ export default function Home() {
             ◉ SIGN IN WITH GOOGLE
           </button>
         )}
+        {loginStatus && (
+          <p className="font-mono text-xs" style={{ color: "#FFD700", maxWidth: 360, textAlign: "center" }}>{loginStatus}</p>
+        )}
         {gateError && gateState === "login" && (
           <p className="font-mono text-xs" style={{ color: "#FF6B35", maxWidth: 360, textAlign: "center" }}>{gateError}</p>
         )}
+        <p className="font-mono" style={{ fontSize: 9, color: "rgba(0,212,255,0.2)" }}>
+          CLIENT_ID: {CLIENT_ID ? CLIENT_ID.slice(0, 12) + "..." : "MISSING"}
+        </p>
       </div>
     );
   }
