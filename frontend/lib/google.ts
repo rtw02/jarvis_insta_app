@@ -55,6 +55,41 @@ export function loadGoogleScript(): Promise<void> {
   });
 }
 
+// Gate auth: uses accounts.id (One Tap / Sign In With Google).
+// Returns email decoded from id_token JWT — no userinfo API call needed.
+export function initGateSignIn(
+  clientId: string,
+  onSuccess: (email: string) => void,
+  onError: (msg: string) => void,
+): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const google = (window as any).google;
+  if (!google?.accounts?.id) { onError("Google SDK not loaded"); return; }
+
+  google.accounts.id.initialize({
+    client_id: clientId,
+    callback: (response: { credential?: string }) => {
+      if (!response.credential) { onError("No credential returned"); return; }
+      try {
+        const payload = JSON.parse(atob(response.credential.split(".")[1]));
+        onSuccess(payload.email ?? "");
+      } catch {
+        onError("Failed to decode credential");
+      }
+    },
+    auto_select: false,
+    cancel_on_tap_outside: false,
+  });
+}
+
+export function renderGoogleButton(el: HTMLElement): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const google = (window as any).google;
+  google?.accounts?.id?.renderButton(el, {
+    theme: "filled_black", size: "large", text: "signin_with", logo_alignment: "left",
+  });
+}
+
 export function requestGoogleToken(clientId: string): Promise<string> {
   return new Promise((resolve, reject) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

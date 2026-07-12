@@ -14,7 +14,7 @@ import { fetchProfile, proxyUrl, connectInstagram } from "@/lib/api";
 import { loadModels, detectFaces, loadImageElement } from "@/lib/faceDetection";
 import { scorePost } from "@/lib/scoring";
 import { clusterFaces, findMainSubject } from "@/lib/clustering";
-import { loadGoogleScript, requestGoogleToken, fetchUserInfo, saveToken, loadToken } from "@/lib/google";
+import { loadGoogleScript, requestGoogleToken, fetchUserInfo, saveToken, loadToken, initGateSignIn, renderGoogleButton } from "@/lib/google";
 import type { ScoredPost } from "@/lib/scoring";
 import type { FaceResult } from "@/lib/faceDetection";
 import type { RawPost } from "@/lib/api";
@@ -57,6 +57,7 @@ export default function Home() {
   const [gateError, setGateError] = useState("");
   const [showBoot, setShowBoot] = useState(false);
   const [loginStatus, setLoginStatus] = useState("");
+  const signinBtnRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<Tab>("briefing");
   const [appState, setAppState] = useState<AppState>("idle");
   const [authState, setAuthState] = useState<AuthState>("idle");
@@ -101,6 +102,32 @@ export default function Home() {
     if (gateState === "granted" && !sessionStorage.getItem(BOOT_SHOWN_KEY)) {
       setShowBoot(true);
     }
+  }, [gateState]);
+
+  // Render Google Sign-In button when gate shows login
+  useEffect(() => {
+    if (gateState !== "login") return;
+    loadGoogleScript().then(() => {
+      if (!signinBtnRef.current) return;
+      initGateSignIn(
+        CLIENT_ID,
+        (email) => {
+          setLoginStatus(`GOT: ${email}`);
+          if (email === ALLOWED_EMAIL) {
+            sessionStorage.setItem(GATE_EMAIL_KEY, email);
+            setGateState("granted");
+          } else {
+            setGateState("denied");
+            setGateError(`Access denied: ${email}`);
+          }
+        },
+        (msg) => {
+          setLoginStatus(`FAILED: ${msg}`);
+          setGateError(msg);
+        },
+      );
+      renderGoogleButton(signinBtnRef.current!);
+    }).catch((e) => setGateError(e.message));
   }, [gateState]);
 
   const handleGoogleLogin = async () => {
@@ -394,13 +421,7 @@ export default function Home() {
             {gateError && <p className="opacity-50" style={{ color: "#FF6B35" }}>{gateError}</p>}
           </div>
         ) : (
-          <button onClick={handleGoogleLogin}
-            className="px-6 py-3 font-mono text-xs tracking-widest rounded transition-all"
-            style={{ border: "1px solid rgba(0,212,255,0.4)", color: "#00D4FF", background: "rgba(0,212,255,0.06)" }}
-            onMouseOver={e => (e.currentTarget.style.background = "rgba(0,212,255,0.12)")}
-            onMouseOut={e => (e.currentTarget.style.background = "rgba(0,212,255,0.06)")}>
-            ◉ SIGN IN WITH GOOGLE
-          </button>
+          <div ref={signinBtnRef} style={{ minHeight: 44 }} />
         )}
         {loginStatus && (
           <p className="font-mono text-xs" style={{ color: "#FFD700", maxWidth: 360, textAlign: "center" }}>{loginStatus}</p>
