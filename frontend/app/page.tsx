@@ -107,17 +107,21 @@ export default function Home() {
     try {
       await loadGoogleScript();
       const token = await requestGoogleToken(CLIENT_ID);
+      console.log("[AUTH] token obtained:", !!token);
       saveToken(token);
       const user = await fetchUserInfo(token);
+      console.log("[AUTH] user email:", user?.email);
       if (user.email === ALLOWED_EMAIL) {
         sessionStorage.setItem(GATE_EMAIL_KEY, user.email);
         setGateState("granted");
       } else {
         setGateState("denied");
-        setGateError(`Access denied for ${user.email}`);
+        setGateError(`Access denied: ${user.email}`);
       }
     } catch (e) {
-      setGateError(e instanceof Error ? e.message : "Login failed");
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[AUTH] error:", msg, e);
+      setGateError(msg);
       setGateState("login");
     }
   };
@@ -396,7 +400,7 @@ export default function Home() {
           </button>
         )}
         {gateError && gateState === "login" && (
-          <p className="font-mono text-xs opacity-40" style={{ color: "#FF6B35" }}>{gateError}</p>
+          <p className="font-mono text-xs" style={{ color: "#FF6B35", maxWidth: 360, textAlign: "center" }}>{gateError}</p>
         )}
       </div>
     );
