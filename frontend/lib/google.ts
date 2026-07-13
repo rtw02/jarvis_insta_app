@@ -90,7 +90,7 @@ export function renderGoogleButton(el: HTMLElement): void {
   });
 }
 
-export function requestGoogleToken(clientId: string): Promise<string> {
+export function requestGoogleToken(clientId: string, prompt = "consent"): Promise<string> {
   return new Promise((resolve, reject) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const google = (window as any).google;
@@ -107,7 +107,7 @@ export function requestGoogleToken(clientId: string): Promise<string> {
         }
       },
     });
-    client.requestAccessToken({ prompt: "consent" });
+    client.requestAccessToken({ prompt });
   });
 }
 

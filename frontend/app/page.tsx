@@ -116,6 +116,8 @@ export default function Home() {
           if (email === ALLOWED_EMAIL) {
             sessionStorage.setItem(GATE_EMAIL_KEY, email);
             setGateState("granted");
+            // Silently pre-fetch Calendar access token so BriefingTab auto-loads
+            requestGoogleToken(CLIENT_ID, "").then(saveToken).catch(() => {});
           } else {
             setGateState("denied");
             setGateError(`Access denied: ${email}`);
