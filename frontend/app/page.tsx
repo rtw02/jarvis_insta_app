@@ -423,7 +423,9 @@ export default function Home() {
             {gateError && <p className="opacity-50" style={{ color: "#FF6B35" }}>{gateError}</p>}
           </div>
         ) : (
-          <div ref={signinBtnRef} style={{ minHeight: 44 }} />
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <div ref={signinBtnRef} />
+          </div>
         )}
         {loginStatus && (
           <p className="font-mono text-xs" style={{ color: "#FFD700", maxWidth: 360, textAlign: "center" }}>{loginStatus}</p>
