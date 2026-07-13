@@ -344,7 +344,7 @@ export default function WeatherWidget() {
           <SunArc sunrise={weather.sunrise} sunset={weather.sunset} />
 
           {/* Temp ring gauge + condition + wind compass */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             {/* Temp ring */}
             <div className="relative flex-shrink-0" style={{ width: 90, height: 90 }}>
               <TempRing temp={weather.temp} min={weather.tempMin} max={weather.tempMax} />

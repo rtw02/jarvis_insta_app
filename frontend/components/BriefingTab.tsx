@@ -5,7 +5,7 @@ import WeatherWidget from "./WeatherWidget";
 import CalendarWidget from "./CalendarWidget";
 import CommuteWidget from "./CommuteWidget";
 import BirthdayWidget from "./BirthdayWidget";
-import TiltCard from "./TiltCard";
+import HoloPanel from "./HoloPanel";
 import {
   loadGoogleScript, requestGoogleToken, fetchUserInfo,
   fetchTodayEvents, fetchRecentEvents,
@@ -141,10 +141,10 @@ export default function BriefingTab({ onOpenScanner }: { onOpenScanner?: () => v
   const dateStr = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <div className="w-full max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6 overflow-x-hidden">
 
       {/* Header row */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-[0.3em] glow-cyan" style={{ fontFamily: "Space Mono, monospace" }}>
             RYAN.AI
@@ -188,7 +188,7 @@ export default function BriefingTab({ onOpenScanner }: { onOpenScanner?: () => v
       </div>
 
       {/* Daily greeting */}
-      <TiltCard className="boot-in border-glow-active rounded-lg p-5" style={{ background: "rgba(0,212,255,0.03)", animationDelay: "0.1s" }}>
+      <HoloPanel delay={0.1} depth={20} bobPhase={0} className="p-5" style={{ borderColor: "rgba(0,212,255,0.3)" }}>
         <div className="flex items-start justify-between">
           <div className="text-cyan-jarvis opacity-40 text-xs tracking-widest font-mono mb-3">// DAILY BRIEFING</div>
           {onOpenScanner && !isIphone && (
@@ -202,19 +202,19 @@ export default function BriefingTab({ onOpenScanner }: { onOpenScanner?: () => v
         <p className="text-sm font-mono leading-relaxed" style={{ color: "rgba(255,255,255,0.85)" }}>
           {greeting}
         </p>
-      </TiltCard>
+      </HoloPanel>
 
       {/* Two-widget row */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <TiltCard className="boot-in" style={{ animationDelay: "0.2s" }}><WeatherWidget /></TiltCard>
-        <TiltCard className="boot-in" style={{ animationDelay: "0.3s" }}><CalendarWidget events={events} loading={calLoading} /></TiltCard>
+        <HoloPanel delay={0.2} depth={60} bobPhase={1}><WeatherWidget /></HoloPanel>
+        <HoloPanel delay={0.3} depth={45} bobPhase={2}><CalendarWidget events={events} loading={calLoading} /></HoloPanel>
       </div>
 
       {/* Commute times for events with locations */}
-      <TiltCard className="boot-in" style={{ animationDelay: "0.4s" }}><CommuteWidget events={events} /></TiltCard>
+      <HoloPanel delay={0.4} depth={30} bobPhase={3}><CommuteWidget events={events} /></HoloPanel>
 
       {/* Upcoming birthdays */}
-      <TiltCard className="boot-in" style={{ animationDelay: "0.5s" }}><BirthdayWidget /></TiltCard>
+      <HoloPanel delay={0.5} depth={20} bobPhase={4}><BirthdayWidget /></HoloPanel>
 
       {/* Debug / error row */}
       {(calError || calDebug) && (

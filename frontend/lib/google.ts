@@ -106,6 +106,7 @@ export function requestGoogleToken(clientId: string, prompt = "consent"): Promis
           resolve(response.access_token);
         }
       },
+      error_callback: (err: { type: string }) => reject(new Error(err.type)),
     });
     client.requestAccessToken({ prompt });
   });

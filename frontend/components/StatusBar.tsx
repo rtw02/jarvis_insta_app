@@ -41,20 +41,17 @@ export default function StatusBar() {
 
   return (
     <header className="relative z-10 border-b border-jarvis-border bg-jarvis-bg/80 backdrop-blur-sm">
-      <div className="flex items-center justify-between px-6 py-3 text-xs font-mono">
+      <div className="flex items-center justify-between px-4 sm:px-6 py-3 text-xs font-mono">
         {/* Left */}
-        <div className="flex items-center gap-6">
-          <span className="glow-cyan text-base font-bold tracking-[0.3em]">
+        <div className="flex items-center gap-3 sm:gap-6 min-w-0">
+          <span className="glow-cyan text-sm sm:text-base font-bold tracking-[0.3em] flex-shrink-0">
             RYAN.AI
           </span>
-          <div className="flex items-center gap-2">
-            <span
-              className="w-2 h-2 rounded-full bg-cyan-jarvis pulse-dot"
-              style={{ backgroundColor: "#00D4FF" }}
-            />
+          <div className="hidden sm:flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full pulse-dot" style={{ backgroundColor: "#00D4FF" }} />
             <span className="text-cyan-jarvis opacity-80">ONLINE</span>
           </div>
-          <span className="text-jarvis-text opacity-50">v0.01</span>
+          <span className="hidden md:inline text-jarvis-text opacity-50">v0.01</span>
         </div>
 
         {/* Center */}
@@ -70,8 +67,11 @@ export default function StatusBar() {
           </span>
         </div>
 
-        {/* Right */}
-        <div className="text-jarvis-text opacity-50 tabular-nums">{time}</div>
+        {/* Right — show only time on mobile, full datetime on desktop */}
+        <div className="text-jarvis-text opacity-50 tabular-nums flex-shrink-0 text-[10px] sm:text-xs">
+          <span className="hidden sm:inline">{time}</span>
+          <span className="sm:hidden">{time.split(" // ")[1]}</span>
+        </div>
       </div>
 
       {/* Animated bottom line */}

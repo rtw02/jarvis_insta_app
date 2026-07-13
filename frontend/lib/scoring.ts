@@ -45,11 +45,17 @@ export function scorePost(
   }
 
   // Weighted total: forward-facing is primary signal
-  const score = Math.round(
+  let score = Math.round(
     frontalScore * 0.50 +
     framingScore * 0.30 +
     clarityScore * 0.20
   );
+
+  // Penalize group shots — reduce score proportionally to number of extra faces
+  if (faceCount > 1) score = Math.round(score * (1 / faceCount));
+
+  // Penalize very small faces (likely crowd background, not a subject photo)
+  if (maxFaceAreaPct < 0.5) score = Math.round(score * 0.3);
 
   // Subject type based on how much of the image the face occupies
   let subjectType: SubjectType;

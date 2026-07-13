@@ -10,11 +10,12 @@ import ScanLoader from "@/components/ScanLoader";
 import BriefingTab from "@/components/BriefingTab";
 import FriendsTab from "@/components/FriendsTab";
 import BootScreen from "@/components/BootScreen";
-import { fetchProfile, proxyUrl, connectInstagram } from "@/lib/api";
+import HologramScene from "@/components/HologramScene";
+import { fetchProfile, proxyUrl, connectInstagram, usingApify } from "@/lib/api";
 import { loadModels, detectFaces, loadImageElement } from "@/lib/faceDetection";
 import { scorePost } from "@/lib/scoring";
 import { clusterFaces, findMainSubject } from "@/lib/clustering";
-import { loadGoogleScript, requestGoogleToken, fetchUserInfo, saveToken, loadToken, initGateSignIn, renderGoogleButton } from "@/lib/google";
+import { loadGoogleScript, requestGoogleToken, fetchUserInfo, saveToken, loadToken } from "@/lib/google";
 import type { ScoredPost } from "@/lib/scoring";
 import type { FaceResult } from "@/lib/faceDetection";
 import type { RawPost } from "@/lib/api";
@@ -22,7 +23,6 @@ import type { RawPost } from "@/lib/api";
 const ALLOWED_EMAIL = "rtwong02@gmail.com";
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 const GATE_EMAIL_KEY = "jarvis_gate_email";
-const BOOT_SHOWN_KEY = "jarvis_booted";
 
 type Tab = "briefing" | "friends" | "intel";
 type AppState = "idle" | "fetching" | "loading-models" | "analyzing" | "clustering" | "complete" | "error";
@@ -57,12 +57,12 @@ export default function Home() {
   const [gateError, setGateError] = useState("");
   const [showBoot, setShowBoot] = useState(false);
   const [loginStatus, setLoginStatus] = useState("");
-  const signinBtnRef = useRef<HTMLDivElement>(null);
+  const [loginLoading, setLoginLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("briefing");
   const [appState, setAppState] = useState<AppState>("idle");
-  const [authState, setAuthState] = useState<AuthState>("idle");
+  const [authState, setAuthState] = useState<AuthState>(usingApify ? "connected" : "idle");
   const [username, setUsername] = useState("");
-  const [sessionId, setSessionId] = useState("");
+  const [sessionId, setSessionId] = useState(usingApify ? "apify" : "");
   const [error, setError] = useState("");
   const [bootLines, setBootLines] = useState<string[]>([]);
   const [analyzeProgress, setAnalyzeProgress] = useState({ current: 0, total: 0, found: 0, status: "" });
@@ -97,52 +97,20 @@ export default function Home() {
       .catch(() => setGateState("login"));
   }, []);
 
-  // Show boot screen once per session when gate is first passed
   useEffect(() => {
-    if (gateState === "granted" && !sessionStorage.getItem(BOOT_SHOWN_KEY)) {
-      setShowBoot(true);
-    }
-  }, [gateState]);
-
-  // Render Google Sign-In button when gate shows login
-  useEffect(() => {
-    if (gateState !== "login") return;
-    loadGoogleScript().then(() => {
-      if (!signinBtnRef.current) return;
-      initGateSignIn(
-        CLIENT_ID,
-        (email) => {
-          setLoginStatus(`GOT: ${email}`);
-          if (email === ALLOWED_EMAIL) {
-            sessionStorage.setItem(GATE_EMAIL_KEY, email);
-            setGateState("granted");
-            // Silently pre-fetch Calendar access token so BriefingTab auto-loads
-            requestGoogleToken(CLIENT_ID, "").then(saveToken).catch(() => {});
-          } else {
-            setGateState("denied");
-            setGateError(`Access denied: ${email}`);
-          }
-        },
-        (msg) => {
-          setLoginStatus(`FAILED: ${msg}`);
-          setGateError(msg);
-        },
-      );
-      renderGoogleButton(signinBtnRef.current!);
-    }).catch((e) => setGateError(e.message));
+    if (gateState === "granted") setShowBoot(true);
   }, [gateState]);
 
   const handleGoogleLogin = async () => {
+    if (loginLoading) return;
     setGateError("");
-    setLoginStatus("LOADING SDK...");
+    setLoginStatus("CONNECTING...");
+    setLoginLoading(true);
     try {
       await loadGoogleScript();
-      setLoginStatus("REQUESTING TOKEN...");
       const token = await requestGoogleToken(CLIENT_ID);
-      setLoginStatus("FETCHING USER INFO...");
       saveToken(token);
       const user = await fetchUserInfo(token);
-      setLoginStatus(`GOT: ${user.email}`);
       if (user.email === ALLOWED_EMAIL) {
         sessionStorage.setItem(GATE_EMAIL_KEY, user.email);
         setGateState("granted");
@@ -152,9 +120,9 @@ export default function Home() {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setLoginStatus(`FAILED: ${msg}`);
+      setLoginStatus(msg.includes("popup") ? "POPUP CLOSED" : "AUTH FAILED");
       setGateError(msg);
-      setGateState("login");
+      setLoginLoading(false);
     }
   };
 
@@ -326,18 +294,27 @@ export default function Home() {
 
     const mainCluster = findMainSubject(clusters, postFaceCounts);
 
-    // Step 2: Match all solo photos (any tier) against the identified centroid
-    // Looser threshold (0.6) catches same person in half-body/full-body shots
-    const MATCH_THRESHOLD = 0.65;
+    // Step 2: Match all solo photos (any tier) against the identified centroid.
+    // Stricter threshold for tiny-face shots (full-body tier) to prevent crowd
+    // backgrounds from passing — a concert photo with one barely-visible face
+    // needs a much tighter distance than a close-up portrait.
+    const THRESHOLD_PORTRAIT  = 0.52; // face >= 2% area (FACE / HALF_BODY tier)
+    const THRESHOLD_BODY      = 0.42; // face < 2% area (FULL_BODY tier)
+    const MIN_FACE_AREA       = 0.5;  // exclude faces < 0.5% — likely crowd background
+
     const mainFaceAnalyses = mainCluster
-      ? analyses.filter(a =>
-          a.faceResult.faceCount === 1 &&
-          a.faceResult.descriptors.some(d => euclidean(d, mainCluster.centroid) < MATCH_THRESHOLD)
-        )
+      ? analyses.filter(a => {
+          if (a.faceResult.faceCount !== 1) return false;
+          if (a.faceResult.maxFaceAreaPct < MIN_FACE_AREA) return false;
+          const thr = a.faceResult.maxFaceAreaPct >= 2 ? THRESHOLD_PORTRAIT : THRESHOLD_BODY;
+          return a.faceResult.descriptors.some(d => euclidean(d, mainCluster.centroid) < thr);
+        })
       : [];
 
-    // Fallback: if clustering finds no subject, show all solo face photos
-    const allFaceAnalyses = analyses.filter(a => a.faceResult.faceCount === 1);
+    // Fallback: if clustering finds no subject, show solo face photos above size floor
+    const allFaceAnalyses = analyses.filter(a =>
+      a.faceResult.faceCount === 1 && a.faceResult.maxFaceAreaPct >= MIN_FACE_AREA
+    );
     filteredAnalyses = mainFaceAnalyses.length > 0 ? mainFaceAnalyses : allFaceAnalyses;
 
     if (mainCluster && mainFaceAnalyses.length > 0) {
@@ -413,27 +390,76 @@ export default function Home() {
 
   if (gateState === "login" || gateState === "denied") {
     return (
-      <div className="relative min-h-screen flex flex-col items-center justify-center gap-6">
+      <div className="relative min-h-screen flex flex-col items-center justify-center gap-8">
         <JarvisBackground />
-        <h1 className="font-mono text-3xl font-bold tracking-[0.4em] glow-cyan">RYAN.AI</h1>
-        <p className="font-mono text-xs tracking-widest opacity-40" style={{ color: "rgba(255,255,255,0.6)" }}>AUTHORIZED ACCESS ONLY</p>
-        {gateState === "denied" ? (
-          <div className="font-mono text-xs tracking-widest text-center space-y-3">
-            <p style={{ color: "#FF6B35" }}>ACCESS DENIED</p>
-            {gateError && <p className="opacity-50" style={{ color: "#FF6B35" }}>{gateError}</p>}
-          </div>
-        ) : (
-          <div style={{ display: "flex", justifyContent: "center" }}>
-            <div ref={signinBtnRef} />
-          </div>
-        )}
-        {loginStatus && (
-          <p className="font-mono text-xs" style={{ color: "#FFD700", maxWidth: 360, textAlign: "center" }}>{loginStatus}</p>
-        )}
-        {gateError && gateState === "login" && (
-          <p className="font-mono text-xs" style={{ color: "#FF6B35", maxWidth: 360, textAlign: "center" }}>{gateError}</p>
-        )}
-        <p className="font-mono" style={{ fontSize: 9, color: "rgba(0,212,255,0.2)" }}>
+
+        {/* Logo */}
+        <div className="text-center space-y-2">
+          <h1 className="font-mono text-4xl font-bold tracking-[0.5em] glow-cyan">RYAN.AI</h1>
+          <p className="font-mono text-[10px] tracking-[0.35em] opacity-30" style={{ color: "#00D4FF" }}>
+            AUTHORIZED ACCESS ONLY
+          </p>
+        </div>
+
+        {/* Auth card */}
+        <div className="relative flex flex-col items-center gap-5 px-6 py-8 rounded-lg w-[90vw] max-w-sm"
+          style={{ border: "1px solid rgba(0,212,255,0.15)", background: "rgba(0,10,20,0.6)", backdropFilter: "blur(12px)" }}>
+
+          {/* Corner brackets */}
+          {[["top-0 left-0 border-t border-l",""], ["top-0 right-0 border-t border-r",""], ["bottom-0 left-0 border-b border-l",""], ["bottom-0 right-0 border-b border-r",""]].map(([cls], i) => (
+            <span key={i} className={`absolute w-3 h-3 ${cls}`} style={{ borderColor: "rgba(0,212,255,0.4)" }} />
+          ))}
+
+          {gateState === "denied" ? (
+            <div className="font-mono text-xs tracking-widest text-center space-y-2">
+              <p style={{ color: "#FF6B35" }}>⊗ ACCESS DENIED</p>
+              {gateError && <p className="opacity-50 text-[10px]" style={{ color: "#FF6B35" }}>{gateError}</p>}
+            </div>
+          ) : (
+            <>
+              <p className="font-mono text-[10px] tracking-widest opacity-40 text-center" style={{ color: "#00D4FF" }}>
+                IDENTITY VERIFICATION REQUIRED
+              </p>
+
+              <button
+                onClick={handleGoogleLogin}
+                disabled={loginLoading}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "12px 24px", borderRadius: 6, cursor: loginLoading ? "default" : "pointer",
+                  border: "1px solid rgba(0,212,255,0.35)",
+                  background: loginLoading ? "rgba(0,212,255,0.03)" : "rgba(0,212,255,0.07)",
+                  transition: "all 0.2s", width: "100%", justifyContent: "center",
+                }}
+                onMouseOver={e => { if (!loginLoading) e.currentTarget.style.background = "rgba(0,212,255,0.13)"; }}
+                onMouseOut={e => { e.currentTarget.style.background = loginLoading ? "rgba(0,212,255,0.03)" : "rgba(0,212,255,0.07)"; }}
+              >
+                {/* Google G SVG */}
+                {!loginLoading ? (
+                  <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0 }}>
+                    <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
+                    <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
+                    <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
+                    <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/>
+                  </svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 18 18" style={{ flexShrink: 0, animation: "hudSpin 1s linear infinite", transformOrigin: "center" }}>
+                    <circle cx="9" cy="9" r="7" fill="none" stroke="#00D4FF" strokeWidth="1.5" strokeDasharray="22 20" />
+                  </svg>
+                )}
+                <span className="font-mono text-xs tracking-[0.2em]" style={{ color: loginLoading ? "rgba(0,212,255,0.4)" : "#00D4FF" }}>
+                  {loginLoading ? loginStatus || "AUTHENTICATING..." : "SIGN IN WITH GOOGLE"}
+                </span>
+              </button>
+
+              {gateError && (
+                <p className="font-mono text-[10px] text-center opacity-70" style={{ color: "#FF6B35", maxWidth: 260 }}>{gateError}</p>
+              )}
+            </>
+          )}
+        </div>
+
+        <p className="font-mono" style={{ fontSize: 8, color: "rgba(0,212,255,0.15)" }}>
           CLIENT_ID: {CLIENT_ID ? CLIENT_ID.slice(0, 12) + "..." : "MISSING"}
         </p>
       </div>
@@ -441,12 +467,10 @@ export default function Home() {
   }
 
   return (
+    <HologramScene>
     <div className="relative min-h-screen flex flex-col">
       {showBoot && (
-        <BootScreen onComplete={() => {
-          sessionStorage.setItem(BOOT_SHOWN_KEY, "1");
-          setShowBoot(false);
-        }} />
+        <BootScreen onComplete={() => setShowBoot(false)} />
       )}
       <JarvisBackground />
       <StatusBar />
@@ -458,7 +482,7 @@ export default function Home() {
         <div className="flex flex-1">
           {(["briefing", "friends"] as Tab[]).map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
-              className="px-8 py-2.5 text-xs tracking-[0.3em] transition-all"
+              className="px-4 sm:px-8 py-2.5 text-xs tracking-[0.2em] sm:tracking-[0.3em] transition-all"
               style={{
                 color: activeTab === tab ? "#00D4FF" : "rgba(255,255,255,0.25)",
                 background: activeTab === tab ? "rgba(0,212,255,0.04)" : "transparent",
@@ -514,7 +538,7 @@ export default function Home() {
 
             {bootLines.length === BOOT_LINES.length && (
               <div className="w-full space-y-4 animate-fade-up">
-                {authState === "idle" && (
+                {!usingApify && authState === "idle" && (
                   <button onClick={handleConnect}
                     className="w-full py-4 text-sm tracking-[0.3em] font-bold rounded"
                     style={{ border: "1px solid rgba(255,107,53,0.5)", color: "#FF6B35", background: "rgba(255,107,53,0.05)", cursor: "pointer", fontFamily: "Space Mono, monospace", transition: "all 0.2s" }}
@@ -524,13 +548,13 @@ export default function Home() {
                     ◉ CONNECT INSTAGRAM
                   </button>
                 )}
-                {authState === "connecting" && (
+                {!usingApify && authState === "connecting" && (
                   <div className="w-full py-4 text-sm tracking-[0.3em] font-bold rounded text-center animate-pulse"
                     style={{ border: "1px solid rgba(255,107,53,0.3)", color: "#FF6B35", fontFamily: "Space Mono, monospace" }}>
                     ◌ AUTHENTICATING — LOG IN TO THE BROWSER WINDOW...
                   </div>
                 )}
-                {authState === "connected" && (
+                {!usingApify && authState === "connected" && (
                   <div className="flex items-center justify-between px-4 py-3 rounded"
                     style={{ border: "1px solid rgba(0,212,255,0.3)", background: "rgba(0,212,255,0.04)" }}>
                     <div className="flex items-center gap-3">
@@ -559,7 +583,7 @@ export default function Home() {
 
                 <button onClick={handleScan} disabled={!username.trim() || authState !== "connected"}
                   className="jarvis-btn w-full py-4 text-sm tracking-[0.4em] font-bold disabled:opacity-30 disabled:cursor-not-allowed">
-                  {authState !== "connected" ? "CONNECT INSTAGRAM FIRST" : "INITIATE SCAN"}
+                  {!usingApify && authState !== "connected" ? "CONNECT INSTAGRAM FIRST" : "INITIATE SCAN"}
                 </button>
 
                 {error && (
@@ -733,5 +757,6 @@ export default function Home() {
         </>}
       </main>
     </div>
+    </HologramScene>
   );
 }

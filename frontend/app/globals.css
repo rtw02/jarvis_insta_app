@@ -356,6 +356,65 @@ body {
   to   { transform: translateX(0);    filter: blur(0);   opacity: 1; }
 }
 
+/* ── Holographic glass panel ── */
+.holo-panel {
+  background: rgba(0, 12, 25, 0.18);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  border: 1px solid rgba(0, 212, 255, 0.18);
+  box-shadow:
+    0 0 40px rgba(0, 212, 255, 0.06),
+    0 0 80px rgba(0, 212, 255, 0.03),
+    inset 0 0 20px rgba(0, 212, 255, 0.04),
+    inset 0 1px 0 rgba(0, 212, 255, 0.1);
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.holo-panel:hover {
+  border-color: rgba(0, 212, 255, 0.32);
+  box-shadow:
+    0 0 60px rgba(0, 212, 255, 0.1),
+    0 0 120px rgba(0, 212, 255, 0.04),
+    inset 0 0 30px rgba(0, 212, 255, 0.06),
+    inset 0 1px 0 rgba(0, 212, 255, 0.15);
+}
+
+/* Scanline texture */
+.holo-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 212, 255, 0.012) 2px,
+    rgba(0, 212, 255, 0.012) 4px
+  );
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 0;
+}
+
+/* Top-edge shimmer line */
+.holo-panel::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 15%;
+  right: 15%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.35), transparent);
+  z-index: 1;
+}
+
+.holo-panel > * {
+  position: relative;
+  z-index: 2;
+}
+
 /* ── Number flicker on load ── */
 @keyframes numFlicker {
   0%  { opacity: 0; }
