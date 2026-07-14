@@ -6,10 +6,14 @@ const BASE =
   "https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights";
 
 const FILES = [
-  // Face detection
+  // SSD MobileNet v1 (primary detector)
+  "ssd_mobilenetv1_model-weights_manifest.json",
+  "ssd_mobilenetv1_model-shard1",
+  "ssd_mobilenetv1_model-shard2",
+  // Tiny face detector (fast fallback)
   "tiny_face_detector_model-weights_manifest.json",
   "tiny_face_detector_model-shard1",
-  // Tiny landmark model (required for face alignment before recognition)
+  // Tiny landmark model
   "face_landmark_68_tiny_model-weights_manifest.json",
   "face_landmark_68_tiny_model-shard1",
   // Face recognition (128D embeddings)
