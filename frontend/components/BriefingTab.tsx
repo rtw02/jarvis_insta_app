@@ -8,7 +8,7 @@ import BirthdayWidget from "./BirthdayWidget";
 import HoloPanel from "./HoloPanel";
 import {
   loadGoogleScript, requestGoogleToken, fetchUserInfo,
-  fetchUpcomingEvents, fetchRecentEvents,
+  fetchTodayEvents, fetchRecentEvents,
   saveToken, loadToken, clearToken,
 } from "@/lib/google";
 import {
