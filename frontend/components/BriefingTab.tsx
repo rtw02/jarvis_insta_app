@@ -8,7 +8,7 @@ import BirthdayWidget from "./BirthdayWidget";
 import HoloPanel from "./HoloPanel";
 import {
   loadGoogleScript, requestGoogleToken, fetchUserInfo,
-  fetchTodayEvents, fetchRecentEvents,
+  fetchUpcomingEvents, fetchRecentEvents,
   saveToken, loadToken, clearToken,
 } from "@/lib/google";
 import {
@@ -141,7 +141,7 @@ export default function BriefingTab({ onOpenScanner }: { onOpenScanner?: () => v
   const dateStr = now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6 overflow-x-hidden">
+    <div className="w-full max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6" style={{ transformStyle: "preserve-3d" }}>
 
       {/* Header row */}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
@@ -187,11 +187,11 @@ export default function BriefingTab({ onOpenScanner }: { onOpenScanner?: () => v
         )}
       </div>
 
-      {/* Daily greeting */}
-      <HoloPanel delay={0.1} depth={20} bobPhase={0} className="p-5" style={{ borderColor: "rgba(0,212,255,0.3)" }}>
+      {/* Daily greeting — closest to viewer */}
+      <HoloPanel delay={0.1} z={30} bobPhase={0} className="p-5" style={{ borderColor: "rgba(0,212,255,0.3)" }}>
         <div className="flex items-start justify-between">
           <div className="text-cyan-jarvis opacity-40 text-xs tracking-widest font-mono mb-3">// DAILY BRIEFING</div>
-          {onOpenScanner && !isIphone && (
+          {onOpenScanner && (
             <button onClick={onOpenScanner}
               className="text-[10px] font-mono tracking-widest px-2 py-0.5 rounded transition-opacity opacity-20 hover:opacity-50"
               style={{ border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.6)" }}>
@@ -205,16 +205,16 @@ export default function BriefingTab({ onOpenScanner }: { onOpenScanner?: () => v
       </HoloPanel>
 
       {/* Two-widget row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <HoloPanel delay={0.2} depth={60} bobPhase={1}><WeatherWidget /></HoloPanel>
-        <HoloPanel delay={0.3} depth={45} bobPhase={2}><CalendarWidget events={events} loading={calLoading} /></HoloPanel>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4" style={{ transformStyle: "preserve-3d" }}>
+        <HoloPanel delay={0.2} z={22} bobPhase={1}><WeatherWidget /></HoloPanel>
+        <HoloPanel delay={0.3} z={18} bobPhase={2}><CalendarWidget events={events} loading={calLoading} /></HoloPanel>
       </div>
 
       {/* Commute times for events with locations */}
-      <HoloPanel delay={0.4} depth={30} bobPhase={3}><CommuteWidget events={events} /></HoloPanel>
+      <HoloPanel delay={0.4} z={12} bobPhase={3}><CommuteWidget events={events} /></HoloPanel>
 
-      {/* Upcoming birthdays */}
-      <HoloPanel delay={0.5} depth={20} bobPhase={4}><BirthdayWidget /></HoloPanel>
+      {/* Upcoming birthdays — furthest back */}
+      <HoloPanel delay={0.5} z={6} bobPhase={4}><BirthdayWidget /></HoloPanel>
 
       {/* Debug / error row */}
       {(calError || calDebug) && (

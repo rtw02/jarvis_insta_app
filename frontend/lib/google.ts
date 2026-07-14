@@ -155,7 +155,10 @@ async function fetchEventsFromCalendar(
   return (data.items ?? []) as CalendarEvent[];
 }
 
-export async function fetchTodayEvents(accessToken: string): Promise<CalendarEvent[]> {
+export async function fetchTodayEvents(
+  accessToken: string,
+  excludeCalendarNames: string[] = ["work"],
+): Promise<CalendarEvent[]> {
   const now = new Date();
   const start = new Date(now); start.setHours(0, 0, 0, 0);
   const end = new Date(now); end.setHours(23, 59, 59, 999);
@@ -168,7 +171,7 @@ export async function fetchTodayEvents(accessToken: string): Promise<CalendarEve
     maxResults: "50",
   });
 
-  const calendarIds = await fetchCalendarIds(accessToken);
+  const calendarIds = await fetchCalendarIds(accessToken, excludeCalendarNames);
   const results = await Promise.all(
     calendarIds.map(id => fetchEventsFromCalendar(accessToken, id, params))
   );
@@ -181,6 +184,36 @@ export async function fetchTodayEvents(accessToken: string): Promise<CalendarEve
   all.sort((a, b) => {
     const ta = a.start?.dateTime ?? "";
     const tb = b.start?.dateTime ?? "";
+    return ta.localeCompare(tb);
+  });
+  return all;
+}
+
+export async function fetchUpcomingEvents(
+  accessToken: string,
+  days = 7,
+): Promise<CalendarEvent[]> {
+  const now = new Date();
+  const end = new Date(now);
+  end.setDate(end.getDate() + days);
+
+  const params = new URLSearchParams({
+    timeMin: now.toISOString(),
+    timeMax: end.toISOString(),
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "50",
+  });
+
+  const calendarIds = await fetchCalendarIds(accessToken);
+  const results = await Promise.all(
+    calendarIds.map(id => fetchEventsFromCalendar(accessToken, id, params))
+  );
+
+  const all = results.flat().filter(e => !!e.start?.dateTime || !!e.start?.date);
+  all.sort((a, b) => {
+    const ta = a.start?.dateTime ?? a.start?.date ?? "";
+    const tb = b.start?.dateTime ?? b.start?.date ?? "";
     return ta.localeCompare(tb);
   });
   return all;

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import JarvisBackground from "@/components/JarvisBackground";
+import { motion, AnimatePresence } from "framer-motion";
+import GarageBackground from "@/components/GarageBackground";
 import StatusBar from "@/components/StatusBar";
 import ScanProgress from "@/components/ScanProgress";
 import DossierCard from "@/components/DossierCard";
@@ -11,6 +12,7 @@ import BriefingTab from "@/components/BriefingTab";
 import FriendsTab from "@/components/FriendsTab";
 import BootScreen from "@/components/BootScreen";
 import HologramScene from "@/components/HologramScene";
+import CinematicOverlay from "@/components/CinematicOverlay";
 import { fetchProfile, proxyUrl, connectInstagram, usingApify } from "@/lib/api";
 import { loadModels, detectFaces, loadImageElement } from "@/lib/faceDetection";
 import { scorePost } from "@/lib/scoring";
@@ -56,6 +58,7 @@ export default function Home() {
   const [gateState, setGateState] = useState<GateState>("checking");
   const [gateError, setGateError] = useState("");
   const [showBoot, setShowBoot] = useState(false);
+  const [hasBooted, setHasBooted] = useState(false);
   const [loginStatus, setLoginStatus] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("briefing");
@@ -78,6 +81,11 @@ export default function Home() {
     const saved = localStorage.getItem(SESSION_KEY);
     if (saved) { setSessionId(saved); setAuthState("connected"); }
   }, []);
+
+  // Pre-warm face detection models when user opens Intel tab
+  useEffect(() => {
+    if (activeTab === "intel") loadModels().catch(() => {});
+  }, [activeTab]);
 
   // ── Auth gate: verify Google identity on load ──
   useEffect(() => {
@@ -170,7 +178,10 @@ export default function Home() {
     abortRef.current = false;
     setError(""); setResults([]); setRawPosts([]); setVisibleResults(0); setSubjectInfo(null); setScanSummary(null);
 
-    // ── Phase 1: Fetch posts (cached) ──
+    // Start model loading immediately — runs in parallel with the fetch below
+    const modelsPromise = loadModels();
+
+    // ── Phase 1: Fetch posts ──
     setAppState("fetching");
     speak(`Initiating scan on ${handle}.`);
 
@@ -199,11 +210,11 @@ export default function Home() {
       }
     }
 
-    // ── Phase 2: Load models ──
+    // ── Phase 2: Await models (likely already done since fetch ran first) ──
     setAppState("loading-models");
     setAnalyzeProgress({ current: 0, total: posts.length, found: 0, status: "LOADING VISION MODELS..." });
     try {
-      await loadModels();
+      await modelsPromise;
     } catch {
       setError("Failed to load face detection models. Run: npm run download-models");
       setAppState("error"); return;
@@ -212,7 +223,7 @@ export default function Home() {
     // ── Phase 3: Detect faces + extract descriptors ──
     setAppState("analyzing");
     const analyses: PostAnalysis[] = [];
-    const BATCH = 10;
+    const BATCH = 20;
     let completed = 0;
 
     for (let i = 0; i < posts.length; i += BATCH) {
@@ -382,7 +393,7 @@ export default function Home() {
   if (gateState === "checking") {
     return (
       <div className="relative min-h-screen flex items-center justify-center">
-        <JarvisBackground />
+        <GarageBackground />
         <span className="font-mono text-xs tracking-widest animate-pulse" style={{ color: "rgba(0,212,255,0.4)" }}>VERIFYING...</span>
       </div>
     );
@@ -391,7 +402,7 @@ export default function Home() {
   if (gateState === "login" || gateState === "denied") {
     return (
       <div className="relative min-h-screen flex flex-col items-center justify-center gap-8">
-        <JarvisBackground />
+        <GarageBackground />
 
         {/* Logo */}
         <div className="text-center space-y-2">
@@ -467,12 +478,26 @@ export default function Home() {
   }
 
   return (
-    <HologramScene>
     <div className="relative min-h-screen flex flex-col">
-      {showBoot && (
-        <BootScreen onComplete={() => setShowBoot(false)} />
-      )}
-      <JarvisBackground />
+      <CinematicOverlay />
+      <AnimatePresence>
+        {showBoot && (
+          <motion.div
+            key="boot"
+            initial={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50, transition: { duration: 0.5, ease: "easeIn" } }}
+          >
+            <BootScreen onComplete={() => { setShowBoot(false); setHasBooted(true); }} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <GarageBackground />
+      <motion.div
+        className="flex flex-col flex-1"
+        initial={{ opacity: 0, y: 70 }}
+        animate={hasBooted ? { opacity: 1, y: 0 } : { opacity: 0, y: 70 }}
+        transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1], delay: 0.15 }}
+      >
       <StatusBar />
 
       {/* Tab navigation */}
@@ -502,10 +527,11 @@ export default function Home() {
         )}
       </div>
 
-      <main className="relative z-10 flex-1 flex flex-col items-center px-4 py-8">
+      <HologramScene>
+      <main className="relative z-10 flex-1 flex flex-col items-center px-4 py-8" style={{ transformStyle: "preserve-3d" }}>
 
         {/* ── BRIEFING TAB ── */}
-        {activeTab === "briefing" && <BriefingTab onOpenScanner={/iPhone/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "") ? undefined : () => setActiveTab("intel")} />}
+        {activeTab === "briefing" && <BriefingTab onOpenScanner={() => setActiveTab("intel")} />}
 
         {/* ── FRIENDS TAB ── */}
         {activeTab === "friends" && <FriendsTab />}
@@ -756,7 +782,8 @@ export default function Home() {
         )}
         </>}
       </main>
+      </HologramScene>
+      </motion.div>
     </div>
-    </HologramScene>
   );
 }

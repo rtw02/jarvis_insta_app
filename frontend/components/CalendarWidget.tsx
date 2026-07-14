@@ -39,11 +39,12 @@ function isNow(event: CalendarEvent): boolean {
   return now >= new Date(start).getTime() && now <= new Date(end).getTime();
 }
 
-// ── D3 horizontal timeline ────────────────────────────────────────────────────
 
+// ── D3 today timeline ────────────────────────────────────────────────────
 function D3Timeline({ events }: { events: CalendarEvent[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const todayEvents = events;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -63,7 +64,6 @@ function D3Timeline({ events }: { events: CalendarEvent[] }) {
     const svg = d3.select(svgEl).attr("width", W).attr("height", H);
     svg.selectAll("*").remove();
 
-    // Defs: glow filter + clipping rect
     const defs = svg.append("defs");
     defs.append("filter").attr("id", "tl-glow")
       .attr("x", "-30%").attr("y", "-30%").attr("width", "160%").attr("height", "160%")
@@ -76,7 +76,6 @@ function D3Timeline({ events }: { events: CalendarEvent[] }) {
       .append("rect").attr("x", ML).attr("y", MT - 2)
       .attr("width", W - ML - MR).attr("height", H - MT - MB + 4);
 
-    // Hour tick lines (every 2 hours)
     const hours = d3.timeHours(dayStart, dayEnd, 2);
     svg.selectAll(".htick")
       .data(hours).enter().append("line")
@@ -84,7 +83,6 @@ function D3Timeline({ events }: { events: CalendarEvent[] }) {
       .attr("y1", MT).attr("y2", H - MB + 4)
       .attr("stroke", "rgba(0,212,255,0.07)").attr("stroke-width", 1);
 
-    // Hour labels
     svg.selectAll(".hlabel")
       .data(hours).enter().append("text")
       .attr("x", (d: Date) => x(d))
@@ -98,16 +96,14 @@ function D3Timeline({ events }: { events: CalendarEvent[] }) {
         return h === 12 ? "12P" : h > 12 ? `${h - 12}P` : `${h}A`;
       });
 
-    // Baseline
     svg.append("line")
       .attr("x1", ML).attr("x2", W - MR)
       .attr("y1", H - MB + 4).attr("y2", H - MB + 4)
       .attr("stroke", "rgba(0,212,255,0.1)").attr("stroke-width", 0.5);
 
-    // Events
     const BAR_H = 22, BAR_Y = MT + (H - MT - MB - BAR_H) / 2;
 
-    events.forEach(event => {
+    todayEvents.forEach(event => {
       const startDt = event.start?.dateTime ? new Date(event.start.dateTime) : null;
       const endDt   = event.end?.dateTime   ? new Date(event.end.dateTime)   : null;
       if (!startDt || !endDt) return;
@@ -120,14 +116,12 @@ function D3Timeline({ events }: { events: CalendarEvent[] }) {
       const barW = bx2 - bx1;
       const g = svg.append("g").attr("clip-path", "url(#tl-clip)");
 
-      // 3D extrusion shadow underneath bar
       g.append("rect")
         .attr("x", bx1 + 2).attr("y", BAR_Y + 4)
         .attr("width", barW).attr("height", BAR_H)
         .attr("rx", 3)
         .attr("fill", active ? "rgba(0,212,255,0.12)" : "rgba(0,212,255,0.04)");
 
-      // Main bar
       g.append("rect")
         .attr("x", bx1).attr("y", BAR_Y)
         .attr("width", barW).attr("height", BAR_H)
@@ -136,13 +130,11 @@ function D3Timeline({ events }: { events: CalendarEvent[] }) {
         .attr("stroke", active ? "rgba(0,212,255,0.75)" : "rgba(0,212,255,0.22)")
         .attr("stroke-width", active ? 1 : 0.5);
 
-      // Top highlight edge (faux 3D lighting)
       g.append("rect")
         .attr("x", bx1 + 1).attr("y", BAR_Y)
         .attr("width", barW - 2).attr("height", 1)
         .attr("fill", active ? "rgba(0,212,255,0.6)" : "rgba(0,212,255,0.2)");
 
-      // Active indicator: bright left edge + glow
       if (active) {
         g.append("rect")
           .attr("x", bx1).attr("y", BAR_Y)
@@ -150,7 +142,6 @@ function D3Timeline({ events }: { events: CalendarEvent[] }) {
           .attr("fill", "#00D4FF").attr("filter", "url(#tl-glow)");
       }
 
-      // Label (truncate to fit)
       if (barW > 18) {
         const maxChars = Math.floor(barW / 5.5);
         const label = (event.summary ?? "Untitled").slice(0, maxChars);
@@ -163,32 +154,29 @@ function D3Timeline({ events }: { events: CalendarEvent[] }) {
       }
     });
 
-    // Current time indicator
     if (now > dayStart && now < dayEnd) {
       const nx = x(now);
-      // Glow vertical beam
       svg.append("line")
         .attr("x1", nx).attr("x2", nx)
         .attr("y1", MT - 6).attr("y2", H - MB + 6)
         .attr("stroke", "#00D4FF").attr("stroke-width", 1)
         .attr("opacity", 0.85).attr("filter", "url(#tl-glow)");
-      // Triangle indicator at top
       svg.append("polygon")
         .attr("points", `${nx - 4},${MT - 6} ${nx + 4},${MT - 6} ${nx},${MT}`)
         .attr("fill", "#00D4FF").attr("filter", "url(#tl-glow)");
     }
+  }, [todayEvents]);
 
-  }, [events]);
+  if (todayEvents.length === 0) return null;
 
   return (
-    <div ref={containerRef} className="w-full">
+    <div ref={containerRef} className="w-full mb-3">
       <svg ref={svgRef} className="w-full" />
     </div>
   );
 }
 
 // ── Main widget ───────────────────────────────────────────────────────────────
-
 export default function CalendarWidget({ events, loading }: Props) {
   return (
     <div className="border-glow rounded-lg p-4 h-full" style={{ background: "rgba(0,212,255,0.02)" }}>
@@ -199,26 +187,20 @@ export default function CalendarWidget({ events, loading }: Props) {
       )}
 
       {!loading && events.length === 0 && (
-        <div className="text-xs text-jarvis-text opacity-30 tracking-widest font-mono">NO EVENTS SCHEDULED</div>
+        <div className="text-xs text-jarvis-text opacity-30 tracking-widest font-mono">NO EVENTS TODAY</div>
       )}
 
-      {/* D3 timeline */}
-      {!loading && events.length > 0 && (
-        <div className="mb-3">
-          <D3Timeline events={events} />
-        </div>
-      )}
+      {!loading && <D3Timeline events={events} />}
 
-      {/* Event list */}
-      <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: "200px" }}>
-        {events.map((event) => {
+      <div className="space-y-1 overflow-y-auto" style={{ maxHeight: "240px" }}>
+        {events.map(event => {
           const active = isNow(event);
           return (
             <div key={event.id}
               className="flex gap-3 items-start rounded p-2 transition-all"
               style={{
-                background: active ? "rgba(0,212,255,0.06)" : "transparent",
-                border: active ? "1px solid rgba(0,212,255,0.2)" : "1px solid transparent",
+                background: active ? "rgba(0,212,255,0.06)" : "rgba(0,0,0,0.15)",
+                border: active ? "1px solid rgba(0,212,255,0.2)" : "1px solid rgba(0,212,255,0.06)",
               }}
             >
               <div className="flex-shrink-0 text-right" style={{ minWidth: "60px" }}>

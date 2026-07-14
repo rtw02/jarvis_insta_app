@@ -11,7 +11,6 @@ async function loadFaceModels(): Promise<void> {
   const faceapi = await import("face-api.js");
   const MODEL_URL = "/models";
   await Promise.all([
-    faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
     faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
@@ -98,11 +97,6 @@ async function detectLandmarkFaces(imgEl: HTMLImageElement): Promise<{
   ]) {
     withAll = await faceapi.detectAllFaces(imgEl, opts).withFaceLandmarks(true).withFaceDescriptors();
     if (withAll.length > 0) break;
-  }
-
-  if (withAll.length === 0) {
-    const ssdOpts = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.7 });
-    withAll = await faceapi.detectAllFaces(imgEl, ssdOpts).withFaceLandmarks(true).withFaceDescriptors();
   }
 
   if (withAll.length === 0) return { faceCount: 0, maxFaceAreaPct: 0, descriptors: [] };
