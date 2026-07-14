@@ -28,8 +28,6 @@ function timeOfDay(): string {
   return "evening";
 }
 
-const isIphone = typeof navigator !== "undefined" && /iPhone/i.test(navigator.userAgent);
-
 export default function BriefingTab({ onOpenScanner }: { onOpenScanner?: () => void }) {
   const [authState, setAuthState] = useState<AuthState>("idle");
   const [user, setUser] = useState<GoogleUser | null>(null);

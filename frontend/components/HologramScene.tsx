@@ -16,7 +16,8 @@ export default function HologramScene({ children }: { children: React.ReactNode 
   const velocity = useRef({ x: 0, y: 0 });
   const inertiaId = useRef<number | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [hintVisible, setHintVisible] = useState(true);
+  const isMobileDevice = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+  const [hintVisible, setHintVisible] = useState(!isMobileDevice);
 
   const [{ rotX, rotY }, rotApi] = useSpring(() => ({
     rotX: 0,
@@ -119,20 +120,26 @@ export default function HologramScene({ children }: { children: React.ReactNode 
       startInertia();
     };
 
+    const isMobile = window.matchMedia("(pointer: coarse)").matches;
+
     window.addEventListener("mousedown", onMouseDown);
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
-    window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
-    window.addEventListener("touchend", onTouchEnd);
+    if (!isMobile) {
+      window.addEventListener("touchstart", onTouchStart, { passive: true });
+      window.addEventListener("touchmove", onTouchMove, { passive: true });
+      window.addEventListener("touchend", onTouchEnd);
+    }
 
     return () => {
       window.removeEventListener("mousedown", onMouseDown);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onTouchEnd);
+      if (!isMobile) {
+        window.removeEventListener("touchstart", onTouchStart);
+        window.removeEventListener("touchmove", onTouchMove);
+        window.removeEventListener("touchend", onTouchEnd);
+      }
       cancelInertia();
     };
   }, [rotApi]);
@@ -140,7 +147,7 @@ export default function HologramScene({ children }: { children: React.ReactNode 
   return (
     <div
       ref={wrapperRef}
-      style={{ perspective: "2800px", perspectiveOrigin: "50% 36%", cursor: "grab", position: "relative" }}
+      style={{ perspective: "2800px", perspectiveOrigin: "50% 36%", cursor: isMobileDevice ? "default" : "grab", position: "relative" }}
     >
       {hintVisible && (
         <div
